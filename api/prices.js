@@ -77,7 +77,7 @@ export default async function handler(req, res) {
     }
 
     // ── 3. 美股指數 via Yahoo Finance (伺服器端無 CORS 問題) ────────
-    // Yahoo 抓美股指數 + 台股個股（台積電等用 Yahoo 才有即時漲跌）
+    // Yahoo Finance v7/quote API — 有 regularMarketChange & regularMarketChangePercent
     const yahooSymbols = {
       '^IXIC': '那斯達克', '^GSPC': 'S&P500', '^SOX': '費城半導體',
       'TSM': '台積電ADR', 'TW=F': '台指期夜盤', '^TWII': '加權指數',
@@ -87,31 +87,51 @@ export default async function handler(req, res) {
       '2884.TW': '玉山金', '2379.TW': '瑞昱', '2303.TW': '聯電',
       '6505.TW': '台塑化', '3008.TW': '大立光',
     };
-    await Promise.allSettled(
-      Object.entries(yahooSymbols).map(async ([sym, name]) => {
-        try {
-          const r = await fetch(
-            `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=2d`,
-            { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; StockBot/1.0)' } }
-          );
-          if (!r.ok) return;
-          const d = await r.json();
-          const meta = d?.chart?.result?.[0]?.meta;
-          if (!meta) return;
-          const price = meta.regularMarketPrice ?? meta.previousClose;
-          const change = meta.regularMarketChange != null
-            ? +meta.regularMarketChange.toFixed(2)
-            : 0;
-          // Yahoo 的 regularMarketChangePercent 已經是百分比數值（如 4.49 代表 4.49%）
-          const changePct = meta.regularMarketChangePercent != null
-            ? +meta.regularMarketChangePercent.toFixed(2)
-            : 0;
-          // 台股個股去掉 .TW 後綴存 key，方便前端查詢
+
+    // 用 v7/quote 一次批量查詢，最多50個 symbol
+    const symbolList = Object.keys(yahooSymbols).join(',');
+    try {
+      const r = await fetch(
+        `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbolList)}&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,previousClose`,
+        { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; StockBot/1.0)' } }
+      );
+      if (r.ok) {
+        const d = await r.json();
+        const quotes = d?.quoteResponse?.result || [];
+        quotes.forEach(q => {
+          const sym = q.symbol;
+          const price     = q.regularMarketPrice ?? 0;
+          const change    = q.regularMarketChange != null ? +q.regularMarketChange.toFixed(2) : 0;
+          const changePct = q.regularMarketChangePercent != null ? +q.regularMarketChangePercent.toFixed(2) : 0;
+          const name      = yahooSymbols[sym] || sym;
+          // 台股去掉 .TW 後綴
           const key = sym.endsWith('.TW') ? sym.replace('.TW', '') : sym;
           results[key] = { price, change, changePct, name, source: 'Yahoo', ok: true };
-        } catch (e) {}
-      })
-    );
+        });
+      }
+    } catch (e) {
+      // fallback: 逐一查詢
+      await Promise.allSettled(
+        Object.entries(yahooSymbols).map(async ([sym, name]) => {
+          try {
+            const r2 = await fetch(
+              `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=2d`,
+              { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; StockBot/1.0)' } }
+            );
+            if (!r2.ok) return;
+            const d2 = await r2.json();
+            const meta = d2?.chart?.result?.[0]?.meta;
+            if (!meta) return;
+            const price  = meta.regularMarketPrice ?? meta.previousClose ?? 0;
+            const prev   = meta.chartPreviousClose ?? meta.previousClose ?? price;
+            const change = prev ? +(price - prev).toFixed(2) : 0;
+            const changePct = prev ? +((change / prev) * 100).toFixed(2) : 0;
+            const key = sym.endsWith('.TW') ? sym.replace('.TW', '') : sym;
+            results[key] = { price, change, changePct, name, source: 'Yahoo-v8', ok: true };
+          } catch (e2) {}
+        })
+      );
+    }
     // 加權指數同時存為 TAIEX key
     if (results['^TWII']) results['TAIEX'] = { ...results['^TWII'] };
 
