@@ -1,105 +1,89 @@
 // api/prices.js — Vercel Serverless Function
+// 台股 + 美股全部用 Yahoo Finance v8/chart（最即時，用歷史收盤算漲跌）
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Cache-Control', 's-maxage=55, stale-while-revalidate=30');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  try {
-    const results = {};
-    const YH = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+  const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-    // ── 1. 台股個股 & ETF：TWSE STOCK_DAY_ALL（有真實漲跌欄位）────
-    try {
-      const r = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL', {
-        headers: { 'User-Agent': YH }
-      });
-      if (r.ok) {
-        const data = await r.json();
-        if (Array.isArray(data)) {
-          data.forEach(item => {
-            const code  = item.Code?.trim();
-            const price = parseFloat((item.ClosingPrice || '').replace(/,/g, ''));
-            // Change 欄位格式：+45.00 或 -10.00 或 0
-            const rawChange = (item.Change || '').replace(/,/g, '').replace(/▲/g,'+').replace(/▼/g,'-').replace(/X/g,'0').trim();
-            const change    = parseFloat(rawChange) || 0;
-            const prev      = price - change;
-            const changePct = prev !== 0 ? +((change / prev) * 100).toFixed(2) : 0;
-            if (code && !isNaN(price) && price > 0) {
-              results[code] = { price, change: +change.toFixed(2), changePct, name: item.Name, source: 'TWSE', ok: true };
-            }
-          });
-        }
-      }
-    } catch(e) {}
+  const ALL_SYMBOLS = {
+    // 美股指數
+    '^IXIC' : '那斯達克',
+    '^GSPC' : 'S&P500',
+    '^SOX'  : '費城半導體',
+    // 台股指數 & 期貨
+    '^TWII' : '加權指數',
+    'TW=F'  : '台指期夜盤',
+    // 台積電ADR
+    'TSM'   : '台積電ADR',
+    // 台股個股（加 .TW）
+    '2330.TW': '台積電',
+    '2317.TW': '鴻海',
+    '2454.TW': '聯發科',
+    '00878.TW':'國泰永續高股息',
+    '0050.TW' :'元大台灣50',
+    '2412.TW' :'中華電信',
+    '2882.TW' :'國泰金',
+    '00929.TW':'復華台灣科技優息',
+    '2884.TW' :'玉山金',
+    '2379.TW' :'瑞昱',
+    '2303.TW' :'聯電',
+    '6505.TW' :'台塑化',
+    '3008.TW' :'大立光',
+  };
 
-    // ── 2. 上櫃個股 (TPEx) ──────────────────────────────────────────
-    try {
-      const r = await fetch('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes', {
-        headers: { 'User-Agent': YH }
-      });
-      if (r.ok) {
-        const data = await r.json();
-        if (Array.isArray(data)) {
-          data.forEach(item => {
-            const code  = item.SecuritiesCompanyCode?.trim();
-            const price = parseFloat((item.Close || '').replace(/,/g, ''));
-            const prev  = parseFloat((item.Yesterday || '').replace(/,/g, ''));
-            if (code && !isNaN(price) && price > 0 && !results[code]) {
-              const change    = !isNaN(prev) ? +(price - prev).toFixed(2) : 0;
-              const changePct = (!isNaN(prev) && prev > 0) ? +((price - prev) / prev * 100).toFixed(2) : 0;
-              results[code] = { price, change, changePct, name: item.CompanyName, source: 'TPEx', ok: true };
-            }
-          });
-        }
-      }
-    } catch(e) {}
+  const results = {};
 
-    // ── 3. 美股指數 & ADR：Yahoo Finance v8/chart（逐一，最可靠）──
-    const usSymbols = {
-      '^IXIC': '那斯達克',
-      '^GSPC': 'S&P500',
-      '^SOX' : '費城半導體',
-      'TSM'  : '台積電ADR',
-      'TW=F' : '台指期夜盤',
-      '^TWII': '加權指數',
-    };
-
-    await Promise.allSettled(
-      Object.entries(usSymbols).map(async ([sym, name]) => {
-        try {
-          const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`;
-          const r = await fetch(url, {
+  await Promise.allSettled(
+    Object.entries(ALL_SYMBOLS).map(async ([sym, name]) => {
+      try {
+        const r = await fetch(
+          `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`,
+          {
             headers: {
-              'User-Agent': YH,
+              'User-Agent': UA,
               'Accept': 'application/json',
               'Referer': 'https://finance.yahoo.com',
+              'Origin': 'https://finance.yahoo.com',
             }
-          });
-          if (!r.ok) return;
-          const d = await r.json();
-          const result = d?.chart?.result?.[0];
-          if (!result) return;
-          const meta   = result.meta;
-          const closes = result.indicators?.quote?.[0]?.close || [];
-          const price  = meta.regularMarketPrice ?? closes[closes.length - 1];
-          // 用歷史收盤陣列的前一日來算漲跌（最準確）
-          const validCloses = closes.filter(c => c != null);
-          const prevClose   = validCloses.length >= 2
-            ? validCloses[validCloses.length - 2]
-            : (meta.chartPreviousClose ?? meta.previousClose ?? price);
-          const change    = price != null && prevClose != null ? +(price - prevClose).toFixed(2) : 0;
-          const changePct = prevClose && prevClose > 0 ? +((change / prevClose) * 100).toFixed(2) : 0;
-          results[sym] = { price, change, changePct, name, source: 'Yahoo', ok: true };
-        } catch(e) {}
-      })
-    );
+          }
+        );
+        if (!r.ok) return;
+        const d = await r.json();
+        const result = d?.chart?.result?.[0];
+        if (!result) return;
 
-    // 加權指數同時存為 TAIEX key
-    if (results['^TWII']) results['TAIEX'] = { ...results['^TWII'] };
+        const meta   = result.meta;
+        const closes = (result.indicators?.quote?.[0]?.close || []).filter(c => c != null && c > 0);
 
-    return res.status(200).json({ ok: true, data: results, updatedAt: new Date().toISOString() });
-  } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
-  }
+        // 現價：優先用 regularMarketPrice（盤中即時），fallback 用最後收盤
+        const price = meta.regularMarketPrice ?? closes[closes.length - 1];
+        if (!price || price <= 0) return;
+
+        // 昨收：用倒數第二筆歷史收盤（最準確），fallback 用 meta
+        const prevClose = closes.length >= 2
+          ? closes[closes.length - 2]
+          : (meta.chartPreviousClose ?? meta.previousClose ?? price);
+
+        const change    = +(price - prevClose).toFixed(2);
+        const changePct = prevClose > 0 ? +((change / prevClose) * 100).toFixed(2) : 0;
+
+        // 台股去掉 .TW 後綴存 key
+        const key = sym.endsWith('.TW') ? sym.replace('.TW', '') : sym;
+        results[key] = { price, change, changePct, name, source: 'Yahoo', ok: true };
+      } catch(e) {}
+    })
+  );
+
+  // 加權指數同時存為 TAIEX key
+  if (results['^TWII']) results['TAIEX'] = { ...results['^TWII'] };
+
+  return res.status(200).json({
+    ok: Object.keys(results).length > 0,
+    data: results,
+    count: Object.keys(results).length,
+    updatedAt: new Date().toISOString()
+  });
 }
