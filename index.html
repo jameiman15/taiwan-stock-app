@@ -534,9 +534,57 @@ function renderHome() {
       <div class="sc"><div class="sc-l">帳戶市值</div><div class="sc-v" style="font-size:13px;">NT$${Math.round(tv).toLocaleString()}</div></div>
       <div class="sc"><div class="sc-l">總損益</div><div class="sc-v ${roi>=0?'up':'dn'}">${roi>=0?'+':''}${roi}%</div></div>
     </div>
-    <div class="st">持倉速覽 <span class="sa" onclick="go('portfolio')">全部 →</span></div>
-    ${stocks.slice(0,4).map(s=>stockCard(s)).join('')}
-    ${stocks.length>4?`<div style="text-align:center;padding:8px;font-size:13px;color:var(--text3)">還有 ${stocks.length-4} 檔 →</div>`:''}
+    <div class="st">各帳戶損益 <span class="sa" onclick="go('portfolio')">持倉 →</span></div>
+    ${(() => {
+      // 計算全體總損益
+      let totalV = 0, totalC = 0;
+      ACCOUNTS.forEach(a => {
+        const ac = PF[a.id] || {};
+        (ac.stocks||[]).forEach(s => {
+          const p = gP(s.code);
+          totalV += (p?.price ?? s.cost) * s.qty;
+          totalC += s.cost * s.qty;
+        });
+        (ac.funds||[]).forEach(f => { totalV += f.nav*f.units; totalC += f.cost; });
+      });
+      const totalRoi = totalC > 0 ? ((totalV-totalC)/totalC*100).toFixed(1) : 0;
+      const totalPnl = Math.round(totalV - totalC);
+      const totalCls = totalPnl >= 0 ? 'up' : 'dn';
+
+      // 各帳戶損益列
+      const rows = ACCOUNTS.map(a => {
+        const ac = PF[a.id] || {};
+        let av=0, ac2=0;
+        (ac.stocks||[]).forEach(s => {
+          const p = gP(s.code);
+          av += (p?.price ?? s.cost) * s.qty;
+          ac2 += s.cost * s.qty;
+        });
+        (ac.funds||[]).forEach(f => { av += f.nav*f.units; ac2 += f.cost; });
+        if (ac2 === 0) return '';
+        const roi = ((av-ac2)/ac2*100).toFixed(1);
+        const pnl = Math.round(av - ac2);
+        const cls = pnl >= 0 ? 'up' : 'dn';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border)">
+          <div style="font-size:13px;font-weight:500">${a.e} ${a.name}</div>
+          <div style="text-align:right">
+            <span style="font-size:13px;font-weight:700;font-family:'Space Mono',monospace" class="${cls}">${roi>=0?'+':''}${roi}%</span>
+            <span style="font-size:11px;color:var(--text3);margin-left:6px">${pnl>=0?'+':''}NT$${Math.abs(pnl).toLocaleString()}</span>
+          </div>
+        </div>`;
+      }).filter(Boolean).join('');
+
+      return `<div class="card" style="padding:0 16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:2px solid var(--border2)">
+          <div style="font-size:13px;font-weight:700">💰 全體總損益</div>
+          <div style="text-align:right">
+            <span style="font-size:18px;font-weight:700;font-family:'Space Mono',monospace" class="${totalCls}">${totalRoi>=0?'+':''}${totalRoi}%</span>
+            <div style="font-size:11px;color:var(--text3);margin-top:1px">${totalPnl>=0?'+':''}NT$${Math.abs(totalPnl).toLocaleString()}</div>
+          </div>
+        </div>
+        ${rows || '<div style="padding:12px 0;font-size:13px;color:var(--text3)">尚無持倉資料</div>'}
+      </div>`;
+    })()}
   `;
 }
 
@@ -545,7 +593,30 @@ function renderPortfolio() {
   const stocks = (acc.stocks||[]).filter(s=>s.type==='stock');
   const etfs   = (acc.stocks||[]).filter(s=>s.type==='etf');
   const funds  = acc.funds || [];
+  // 計算本帳戶總損益
+  let ptv=0, ptc=0;
+  (acc.stocks||[]).forEach(s => {
+    const p = gP(s.code);
+    ptv += (p?.price ?? s.cost) * s.qty;
+    ptc += s.cost * s.qty;
+  });
+  (acc.funds||[]).forEach(f => { ptv += f.nav*f.units; ptc += f.cost; });
+  const proi = ptc > 0 ? ((ptv-ptc)/ptc*100).toFixed(1) : 0;
+  const ppnl = Math.round(ptv - ptc);
+  const pcls = ppnl >= 0 ? 'up' : 'dn';
+
   document.getElementById('p-portfolio').innerHTML = `
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:2px">帳戶總市值</div>
+        <div style="font-size:16px;font-weight:700;font-family:'Space Mono',monospace">NT$${Math.round(ptv).toLocaleString()}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:2px">未實現損益</div>
+        <div style="font-size:20px;font-weight:700;font-family:'Space Mono',monospace" class="${pcls}">${proi>=0?'+':''}${proi}%</div>
+        <div style="font-size:11px;color:var(--text3)">${ppnl>=0?'+':''}NT$${Math.abs(ppnl).toLocaleString()}</div>
+      </div>
+    </div>
     <div class="st">個股 (${stocks.length}) <span class="sa" onclick="openAddModal()">＋ 新增</span></div>
     ${stocks.length ? stocks.map(s=>stockCard(s,true,true)).join('') : '<div style="color:var(--text3);font-size:13px;padding:8px 0">尚無個股</div>'}
     <div class="st" style="margin-top:8px">ETF (${etfs.length})</div>
@@ -631,10 +702,23 @@ function renderAI() {
     else if (isTWSEAfter) {
       if (taiex) parts.push(`【台股收盤】加權指數收在 ${taiex.price?.toLocaleString()||'—'} 點，${taiex.changePct>=0?'上漲':'下跌'} ${Math.abs(taiex.changePct||0).toFixed(2)}%。`);
       if (tsmc)  parts.push(`台積電收 $${fmtN(tsmc.price)}，${tsmc.changePct>=0?'+':' '}${tsmc.changePct?.toFixed(2)||0}%。`);
-      // 明日開盤預測
+      // 收盤操作建議
+      const twPct = taiex?.changePct || 0;
+      if (twPct > 2) {
+        parts.push(`【操作建議】台股大漲，追高風險升高，建議持股不追，等待回測支撐再考慮加倉；已持股續抱，設好停利點。`);
+      } else if (twPct > 0.5) {
+        parts.push(`【操作建議】台股收紅，市場氣氛偏多。持股可續抱，體質佳個股可逢小回補倉，AI與半導體族群持續關注。`);
+      } else if (twPct < -2) {
+        parts.push(`【操作建議】台股重跌，建議減少持股曝險，保留現金等待止跌訊號；停損設定勿猶豫，保住本金優先。`);
+      } else if (twPct < -0.5) {
+        parts.push(`【操作建議】台股小跌，非重大利空，持股不需急於停損；可觀察是否有優質個股回測買點，分批低接為宜。`);
+      } else {
+        parts.push(`【操作建議】台股盤整，量縮觀望。建議持股靜待，不宜追高殺低，等待明確方向再行動。`);
+      }
+      // 明日展望（結合美股夜盤）
       const usAvg2 = ((sox?.changePct||0) + (nasdaq?.changePct||0) + (sp500?.changePct||0)) / 3;
       if (isUSOpen && (sox||sp500)) {
-        parts.push(`【明日展望】美股夜盤費半${usAvg2>0.5?'強勢，台股明日偏多，建議留意半導體族群。':usAvg2<-0.5?'走弱，台股明日偏空，注意控制倉位。':'震盪，台股明日表現中性，選股不選市。'}`);
+        parts.push(`【明日展望】美股夜盤費半${usAvg2>0.5?`強勢（費半${sox?(sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%':'—'}），台股明日偏多，半導體族群可提前關注，逢低布局。`:usAvg2<-0.5?`走弱（費半${sox?(sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%':'—'}），台股明日偏空，建議降低持股比例，保留現金。`:`小幅震盪，台股明日方向不明，以選股取代選市，聚焦業績成長個股。`}`);
       }
     }
     // 盤前（台指期夜盤）
