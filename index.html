@@ -420,19 +420,21 @@ function renderHome() {
   const roi = tc > 0 ? ((tv-tc)/tc*100).toFixed(1) : 0;
   const pnl = Math.round(tv - tc);
 
-  const taiex = gP('TAIEX'), dow = gP('^DJI'), nasdaq = gP('^IXIC'), tsm = gP('TSM');
+  const taiex = gP('TAIEX') || gP('^TWII'), dow = gP('^DJI'), sp500 = gP('^GSPC'), nasdaq = gP('^IXIC'), tsm = gP('TSM');
+  const sox = gP('^SOX'), txf = gP('TW=F'), tsmc = gP('2330');
 
   function idx(name, d, code) {
     if (!d) return `<div class="idx"><div class="idx-n">${name}</div><div class="idx-v"><span class="sk" style="width:60px;height:14px;"></span></div><div class="idx-c neu">—</div></div>`;
     const cls = d.change>=0?'up':'dn', s=d.change>=0?'+':'';
-    return `<div class="idx"><div class="idx-n">${name}</div><div class="idx-v">${fmtN(d.price)}</div><div class="idx-c ${cls}">${s}${d.change?.toFixed(0)||0} (${s}${d.changePct?.toFixed(2)||0}%)</div></div>`;
+    const chgDisplay = Math.abs(d.change||0) >= 10 ? (d.change||0).toFixed(0) : (d.change||0).toFixed(2);
+    return `<div class="idx"><div class="idx-n">${name}</div><div class="idx-v">${fmtN(d.price)}</div><div class="idx-c ${cls}">${s}${chgDisplay} (${s}${(d.changePct||0).toFixed(2)}%)</div></div>`;
   }
 
   let opening = {v:'⏳ 等待數據',r:'載入美股資訊中...'};
-  if (dow) {
-    const avg = ((dow.changePct||0)+(nasdaq?.changePct||0))/2;
-    if (avg > 0.5) opening = {v:'📈 偏多，建議逢低布局',r:`道瓊+${dow.changePct.toFixed(2)}%、那斯達克+${nasdaq?.changePct.toFixed(2)}%，台積電ADR ${tsm?((tsm.changePct>=0?'+':'')+tsm.changePct.toFixed(2)+'%'):'—'}。外資可望回流台股，半導體族群提前布局。`};
-    else if (avg < -0.5) opening = {v:'📉 偏空，控制倉位',r:`道瓊${dow.changePct.toFixed(2)}%下跌，建議降低持股比例，保留現金等待止跌訊號。`};
+  if (sp500) {
+    const avg = ((sp500.changePct||0)+(nasdaq?.changePct||0))/2;
+    if (avg > 0.5) opening = {v:'📈 偏多，建議逢低布局',r:`S&P500+${sp500.changePct.toFixed(2)}%、那斯達克+${nasdaq?.changePct.toFixed(2)}%，台積電ADR ${tsm?((tsm.changePct>=0?'+':'')+tsm.changePct.toFixed(2)+'%'):'—'}。外資可望回流台股，半導體族群提前布局。`};
+    else if (avg < -0.5) opening = {v:'📉 偏空，控制倉位',r:`S&P500${sp500.changePct.toFixed(2)}%下跌，建議降低持股比例，保留現金等待止跌訊號。`};
     else opening = {v:'➡️ 盤整，選股不選市',r:`美股小幅震盪，台股跟隨盤整。聚焦個股題材，績優股為主，避免追高。`};
   }
 
@@ -440,11 +442,18 @@ function renderHome() {
 
   document.getElementById('p-home').innerHTML = `
     ${isErr ? `<div class="api-warn">⚠️ 股價 API 目前離線。請確認已部署到 Vercel，或點右上角重新整理。</div>` : ''}
+    <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">🇺🇸 美股</div>
+    <div class="idx-strip" style="margin-bottom:12px;">
+      ${idx('費城半導體',sox,'^SOX')}
+      ${idx('那斯達克',nasdaq,'^IXIC')}
+      ${idx('S&P 500',sp500,'^GSPC')}
+      ${idx('台積電ADR',tsm,'TSM')}
+    </div>
+    <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">🇹🇼 台股</div>
     <div class="idx-strip">
       ${idx('加權指數',taiex,'TAIEX')}
-      ${idx('那斯達克',nasdaq,'^IXIC')}
-      ${idx('道瓊工業',dow,'^DJI')}
-      ${idx('台積電ADR',tsm,'TSM')}
+      ${idx('台積電',tsmc,'2330')}
+      ${idx('台指期夜盤',txf,'TXF')}
     </div>
     <div class="op-card">
       <div class="op-lbl">🌅 明日開盤建議</div>
