@@ -60,20 +60,36 @@ export default async function handler(req, res) {
     }
 
     // ── 2. 加權指數 ────────────────────────────────────────────────
-    if (indexRes.status === 'fulfilled' && indexRes.value.ok) {
-      const data = await indexRes.value.json();
-      // MI_INDEX 回傳結構：找加權指數那筆
-      const fields = data?.fields9 || [];
-      const rows   = data?.data9   || [];
-      // 找「發行量加權股價指數」那列
-      const taiex = rows.find(r => r?.[0]?.includes('加權'));
-      if (taiex) {
-        const price     = parseFloat(taiex[1]?.replace(/,/g, ''));
-        const changePct = parseFloat(taiex[2]?.replace(/[%,]/g, ''));
-        if (!isNaN(price)) {
-          results['TAIEX'] = { price, change: 0, changePct: changePct || 0, name: '加權指數', source: 'TWSE', ok: true };
+if (indexRes.status === 'fulfilled' && indexRes.value.ok) {
+      try {
+        const data = await indexRes.value.json();
+        // 嘗試多種可能的欄位名稱
+        const rows = data?.data9 || data?.data8 || data?.data || [];
+        const taiex = rows.find(r => Array.isArray(r) && r[0] && (r[0].includes('加權') || r[0].includes('發行量')));
+        if (taiex) {
+          const price = parseFloat((taiex[1] || taiex[2] || '').replace(/,/g, ''));
+          const change = parseFloat((taiex[2] || '0').replace(/,/g, ''));
+          if (!isNaN(price) && price > 0) {
+            const changePct = price > 0 ? +((change / (price - change)) * 100).toFixed(2) : 0;
+            results['TAIEX'] = { price, change, changePct, name: '加權指數', source: 'TWSE', ok: true };
+          }
         }
-      }
+        // 如果上面找不到，直接抓另一個 API
+        if (!results['TAIEX']) {
+          const r2 = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/FMTQIK', {
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+          });
+          if (r2.ok) {
+            const d2 = await r2.json();
+            if (Array.isArray(d2) && d2[0]) {
+              const price = parseFloat((d2[0].TAIEX || '').replace(/,/g, ''));
+              if (!isNaN(price) && price > 0) {
+                results['TAIEX'] = { price, change: 0, changePct: 0, name: '加權指數', source: 'TWSE', ok: true };
+              }
+            }
+          }
+        }
+      } catch(e) {}
     }
 
     // ── 3. 美股指數 via Yahoo Finance (伺服器端無 CORS 問題) ────────
