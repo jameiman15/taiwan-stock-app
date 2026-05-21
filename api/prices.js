@@ -38,7 +38,7 @@ export default async function handler(req, res) {
           const changePct  = price > 0 ? +((realChange / (price - realChange)) * 100).toFixed(2) : 0;
           if (code && !isNaN(price)) {
             const avg = realChange; // reuse variable name for compatibility
-            results[code] = { price, change, changePct, name: item.Name, source: 'TWSE', ok: true };
+            results[code] = { price, change: realChange, changePct, name: item.Name, source: 'TWSE', ok: true };
           }
         });
       }
