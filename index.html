@@ -489,13 +489,70 @@ function renderAI() {
   const acc = PF[S.acct] || {stocks:[],funds:[]};
   const now = new Date();
   const ds = `${now.getMonth()+1}月${now.getDate()}日`;
+  const hour = now.getHours();
+  // 台股盤中：9:00-13:30，盤後：13:30後
+  const isTWSEOpen  = hour >= 9 && (hour < 13 || (hour === 13 && now.getMinutes() < 30));
+  const isTWSEAfter = hour >= 13 && (hour > 13 || now.getMinutes() >= 30);
+  // 美股盤中（台灣時間）：夏令 21:30-04:00，冬令 22:30-05:00
+  const isUSOpen = hour >= 21 || hour < 5;
+
+  // 即時數據
+  const taiex = gP('TAIEX') || gP('^TWII');
+  const sox   = gP('^SOX');
+  const sp500 = gP('^GSPC');
+  const nasdaq= gP('^IXIC');
+  const tsm   = gP('TSM');
+  const txf   = gP('TW=F');
+  const tsmc  = gP('2330');
+
+  // 動態分析文字
+  function buildAnalysis() {
+    const parts = [];
+    // 美股分析
+    if (sox || sp500 || nasdaq) {
+      const usAvg = ((sox?.changePct||0)*0.4 + (nasdaq?.changePct||0)*0.3 + (sp500?.changePct||0)*0.3);
+      const usTrend = usAvg > 0.5 ? '強勢上漲' : usAvg < -0.5 ? '走弱下跌' : '小幅震盪';
+      const usSentiment = usAvg > 1 ? '📈 大漲' : usAvg > 0 ? '📈 小漲' : usAvg < -1 ? '📉 大跌' : '📉 小跌';
+      parts.push(`【美股】費半${sox?(sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%':'—'}、那斯達克${nasdaq?(nasdaq.changePct>=0?'+':'')+nasdaq.changePct.toFixed(2)+'%':'—'}、S&P500${sp500?(sp500.changePct>=0?'+':'')+sp500.changePct.toFixed(2)+'%':'—'}，整體${usTrend}。`);
+    }
+    // 台積電ADR
+    if (tsm) {
+      parts.push(`台積電ADR ${tsm.changePct>=0?'上漲':'下跌'} ${Math.abs(tsm.changePct).toFixed(2)}%，現價 $${tsm.price?.toFixed(2)||'—'}。`);
+    }
+    // 盤中分析
+    if (isTWSEOpen) {
+      if (taiex) parts.push(`【台股盤中】加權指數 ${taiex.price?.toLocaleString()||'—'} 點，${taiex.changePct>=0?'上漲':'下跌'} ${Math.abs(taiex.changePct||0).toFixed(2)}%。`);
+      if (tsmc)  parts.push(`台積電現價 $${fmtN(tsmc.price)}，${tsmc.changePct>=0?'+':' '}${tsmc.changePct?.toFixed(2)||0}%。`);
+      if (txf)   parts.push(`台指期夜盤 ${txf.price?.toLocaleString()||'—'}，${txf.changePct>=0?'+':' '}${txf.changePct?.toFixed(2)||0}%，可作為盤中方向參考。`);
+    }
+    // 盤後分析
+    else if (isTWSEAfter) {
+      if (taiex) parts.push(`【台股收盤】加權指數收在 ${taiex.price?.toLocaleString()||'—'} 點，${taiex.changePct>=0?'上漲':'下跌'} ${Math.abs(taiex.changePct||0).toFixed(2)}%。`);
+      if (tsmc)  parts.push(`台積電收 $${fmtN(tsmc.price)}，${tsmc.changePct>=0?'+':' '}${tsmc.changePct?.toFixed(2)||0}%。`);
+      // 明日開盤預測
+      const usAvg2 = ((sox?.changePct||0) + (nasdaq?.changePct||0) + (sp500?.changePct||0)) / 3;
+      if (isUSOpen && (sox||sp500)) {
+        parts.push(`【明日展望】美股夜盤費半${usAvg2>0.5?'強勢，台股明日偏多，建議留意半導體族群。':usAvg2<-0.5?'走弱，台股明日偏空，注意控制倉位。':'震盪，台股明日表現中性，選股不選市。'}`);
+      }
+    }
+    // 盤前（台指期夜盤）
+    else {
+      if (txf) parts.push(`【台指期夜盤】${txf.price?.toLocaleString()||'—'} 點，${txf.changePct>=0?'+':' '}${txf.changePct?.toFixed(2)||0}%，預示今日台股開盤方向。`);
+      if (tsm) parts.push(`台積電ADR ${tsm.changePct>=0?'收漲':'收跌'} ${Math.abs(tsm.changePct).toFixed(2)}%，對今日台積電走勢有指標意義。`);
+    }
+    return parts.join(' ') || '正在載入市場數據...';
+  }
+
+  const sessionLabel = isTWSEOpen ? '📊 台股盤中分析' : isTWSEAfter ? '📊 台股收盤分析' : '🌙 盤前/夜盤分析';
+  const sessionColor = isTWSEOpen ? '#1d4ed8' : isTWSEAfter ? '#166534' : '#6b21a8';
+
   document.getElementById('p-ai').innerHTML = `
-    <div class="card acc-gd" style="background:#fffdf5">
-      <div style="font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📋 AI 投資日報 · ${ds}</div>
-      <p style="font-size:13px;line-height:1.8">今日美股科技股強勢，Nvidia帶動半導體族群全面上揚。台積電ADR收漲，預計明日帶動加權指數走高。外資連續回補台股，資金集中流向AI相關族群。</p>
+    <div class="card" style="background:#fffdf5;border-left:3px solid ${sessionColor}">
+      <div style="font-size:10px;font-weight:700;color:${sessionColor};text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">${sessionLabel} · ${ds} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}</div>
+      <p style="font-size:13px;line-height:1.85;color:var(--text)">${buildAnalysis()}</p>
       <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px">
         <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px">⚠️ 風險提示</div>
-        <p style="font-size:12px;line-height:1.7;color:var(--text2)">注意美國通膨數據及聯準會態度，地緣政治仍是潛在風險。建議保留15-20%現金，避免過度集中AI概念股。</p>
+        <p style="font-size:12px;line-height:1.7;color:var(--text2)">注意美國通膨數據及聯準會態度，地緣政治仍是潛在風險。建議保留15-20%現金，避免過度集中單一族群。</p>
       </div>
     </div>
 
