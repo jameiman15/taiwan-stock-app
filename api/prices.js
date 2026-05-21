@@ -14,7 +14,7 @@ export default async function handler(req, res) {
 
     // ── 1. 台股全股收盤價 (TWSE OpenAPI，免費無需 key) ──────────────
     const [twseRes, tpexRes, indexRes] = await Promise.allSettled([
-      fetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL', {
+      fetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL', {
         headers: { 'User-Agent': 'Mozilla/5.0' }
       }),
       fetch('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes', {
