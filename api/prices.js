@@ -77,9 +77,18 @@ export default async function handler(req, res) {
     }
 
     // ── 3. 美股指數 via Yahoo Finance (伺服器端無 CORS 問題) ────────
-    const usSymbols = { '^DJI': '道瓊工業', '^IXIC': '那斯達克', '^GSPC': '標普500', 'TSM': '台積電ADR', '^SOX': '費城半導體', '^TWII': '加權指數', 'TW=F': '台指期夜盤' };
+    // Yahoo 抓美股指數 + 台股個股（台積電等用 Yahoo 才有即時漲跌）
+    const yahooSymbols = {
+      '^IXIC': '那斯達克', '^GSPC': 'S&P500', '^SOX': '費城半導體',
+      'TSM': '台積電ADR', 'TW=F': '台指期夜盤', '^TWII': '加權指數',
+      '2330.TW': '台積電', '2317.TW': '鴻海', '2454.TW': '聯發科',
+      '00878.TW': '國泰永續高股息', '0050.TW': '元大台灣50',
+      '2412.TW': '中華電信', '2882.TW': '國泰金', '00929.TW': '復華台灣科技優息',
+      '2884.TW': '玉山金', '2379.TW': '瑞昱', '2303.TW': '聯電',
+      '6505.TW': '台塑化', '3008.TW': '大立光',
+    };
     await Promise.allSettled(
-      Object.entries(usSymbols).map(async ([sym, name]) => {
+      Object.entries(yahooSymbols).map(async ([sym, name]) => {
         try {
           const r = await fetch(
             `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=2d`,
@@ -89,20 +98,21 @@ export default async function handler(req, res) {
           const d = await r.json();
           const meta = d?.chart?.result?.[0]?.meta;
           if (!meta) return;
-          const price     = meta.regularMarketPrice ?? meta.previousClose;
-          const prev      = meta.chartPreviousClose ?? meta.previousClose ?? price;
-          // 優先用 API 直接給的漲跌值，最準確
-          const change    = meta.regularMarketChange != null
+          const price = meta.regularMarketPrice ?? meta.previousClose;
+          const change = meta.regularMarketChange != null
             ? +meta.regularMarketChange.toFixed(2)
-            : +(price - prev).toFixed(2);
+            : 0;
+          // Yahoo 的 regularMarketChangePercent 已經是百分比數值（如 4.49 代表 4.49%）
           const changePct = meta.regularMarketChangePercent != null
             ? +meta.regularMarketChangePercent.toFixed(2)
-            : (prev !== 0 ? +((change / prev) * 100).toFixed(2) : 0);
-          results[sym] = { price, change, changePct, name, source: 'Yahoo', ok: true };
+            : 0;
+          // 台股個股去掉 .TW 後綴存 key，方便前端查詢
+          const key = sym.endsWith('.TW') ? sym.replace('.TW', '') : sym;
+          results[key] = { price, change, changePct, name, source: 'Yahoo', ok: true };
         } catch (e) {}
       })
     );
-    // 讓加權指數同時存為 TAIEX key（前端用）
+    // 加權指數同時存為 TAIEX key
     if (results['^TWII']) results['TAIEX'] = { ...results['^TWII'] };
 
     return res.status(200).json({ ok: true, data: results, updatedAt: new Date().toISOString() });
