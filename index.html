@@ -360,7 +360,7 @@ function priceLine(code) {
   return `$${fmtN(p.price)}`;
 }
 
-function stockCard(s, clickable=true) {
+function stockCard(s, clickable=true, showDelete=false) {
   const p = gP(s.code);
   const d = DIAG[s.code] || {a:'hold',l:'續抱',r:''};
   const accClass = p ? (p.change >= 0 ? 'acc-up' : 'acc-dn') : '';
@@ -372,14 +372,16 @@ function stockCard(s, clickable=true) {
     roiH = `<div class="roi ${cls}">${pct>=0?'+':''}${pct.toFixed(1)}% (${pnl>=0?'+':''}${pnl.toLocaleString()})</div>`;
   }
   const onclick = clickable ? `onclick="openDetail('${s.code}')"` : '';
-  return `<div class="card ${accClass} ${clickable?'cp':''}" ${onclick}>
+  const delBtn = showDelete ? `<button onclick="event.stopPropagation();deleteStock('${s.code}','${S.acct}')" style="position:absolute;top:10px;right:10px;background:none;border:none;cursor:pointer;font-size:16px;color:var(--text3);padding:4px 6px;border-radius:6px;line-height:1" title="刪除">✕</button>` : '';
+  return `<div class="card ${accClass} ${clickable?'cp':''}" ${onclick} style="position:relative">
+    ${delBtn}
     <div class="sr">
       <div class="sl">
         <h3>${s.name} <span style="font-size:11px;font-weight:400;color:var(--text3)">${s.code}</span></h3>
         <div class="meta">${s.qty.toLocaleString()}股 · 成本 $${s.cost}</div>
         ${tagH(d.a)}
       </div>
-      <div class="sr-r">
+      <div class="sr-r" style="${showDelete?'padding-right:24px':''}">
         <div class="price">${priceLine(s.code)}</div>
         <div class="chg">${p ? fmtChg(p.change, p.changePct) : '<span class="neu">---</span>'}</div>
         ${roiH}
@@ -476,9 +478,9 @@ function renderPortfolio() {
   const funds  = acc.funds || [];
   document.getElementById('p-portfolio').innerHTML = `
     <div class="st">個股 (${stocks.length}) <span class="sa" onclick="openAddModal()">＋ 新增</span></div>
-    ${stocks.length ? stocks.map(s=>stockCard(s)).join('') : '<div style="color:var(--text3);font-size:13px;padding:8px 0">尚無個股</div>'}
+    ${stocks.length ? stocks.map(s=>stockCard(s,true,true)).join('') : '<div style="color:var(--text3);font-size:13px;padding:8px 0">尚無個股</div>'}
     <div class="st" style="margin-top:8px">ETF (${etfs.length})</div>
-    ${etfs.length ? etfs.map(s=>stockCard(s)).join('') : '<div style="color:var(--text3);font-size:13px;padding:8px 0">尚無ETF</div>'}
+    ${etfs.length ? etfs.map(s=>stockCard(s,true,true)).join('') : '<div style="color:var(--text3);font-size:13px;padding:8px 0">尚無ETF</div>'}
     <div class="st" style="margin-top:8px">基金 (${funds.length})</div>
     ${funds.length ? funds.map(f=>`<div class="card"><div class="sr"><div class="sl"><h3 style="font-size:14px">${f.name}</h3><div class="meta">淨值 $${f.nav} · ${f.units}單位</div></div><div class="sr-r"><div class="price" style="font-size:14px">NT$${Math.round(f.nav*f.units).toLocaleString()}</div><div class="chg neu">基金</div></div></div></div>`).join('') : '<div style="color:var(--text3);font-size:13px;padding:8px 0">尚無基金</div>'}
     <div style="height:20px"></div>`;
@@ -770,6 +772,14 @@ function doAdd() {
   savePF();
   document.getElementById('modal').remove();
   S.acct = acct; renderTabs(); go('portfolio');
+}
+
+function deleteStock(code, acct) {
+  if (!confirm(`確定要刪除 ${code}？`)) return;
+  if (!PF[acct]?.stocks) return;
+  PF[acct].stocks = PF[acct].stocks.filter(s => s.code !== code);
+  savePF();
+  renderPage(S.page);
 }
 
 // ─── NAV ───────────────────────────────────────────────────
