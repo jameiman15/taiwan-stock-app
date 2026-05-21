@@ -339,9 +339,7 @@ function gP(code) { return S.prices[code] || null; }
 
 function fmtN(n) {
   if (n == null || isNaN(n)) return '---';
-  if (n >= 10000) return n.toLocaleString('zh-TW', {maximumFractionDigits:0});
-  if (n >= 100)   return n.toLocaleString('zh-TW', {maximumFractionDigits:1,minimumFractionDigits:1});
-  return n.toLocaleString('zh-TW', {maximumFractionDigits:2,minimumFractionDigits:2});
+  return n.toLocaleString('zh-TW', {maximumFractionDigits:2, minimumFractionDigits:2});
 }
 
 function fmtChg(c, p) {
@@ -546,14 +544,32 @@ function renderAI() {
   const sessionLabel = isTWSEOpen ? '📊 台股盤中分析' : isTWSEAfter ? '📊 台股收盤分析' : '🌙 盤前/夜盤分析';
   const sessionColor = isTWSEOpen ? '#1d4ed8' : isTWSEAfter ? '#166534' : '#6b21a8';
 
+  // 美股整體情緒
+  const usAvgPct = ((sox?.changePct||0)*0.4 + (nasdaq?.changePct||0)*0.3 + (sp500?.changePct||0)*0.3);
+  const usBull = usAvgPct > 0.5, usBear = usAvgPct < -0.5;
+  const usEmoji = usAvgPct > 1 ? '🚀' : usAvgPct > 0 ? '📈' : usAvgPct < -1 ? '💥' : '📉';
+
   document.getElementById('p-ai').innerHTML = `
-    <div class="card" style="background:#fffdf5;border-left:3px solid ${sessionColor}">
-      <div style="font-size:10px;font-weight:700;color:${sessionColor};text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">${sessionLabel} · ${ds} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}</div>
-      <p style="font-size:13px;line-height:1.85;color:var(--text)">${buildAnalysis()}</p>
+    <!-- 美股日報 -->
+    <div class="card acc-gd" style="background:#fffdf5">
+      <div style="font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📋 美股日報 · ${ds}</div>
+      <p style="font-size:13px;line-height:1.85">
+        ${usEmoji} 費半 <strong>${sox?(sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%':'—'}</strong>、
+        那斯達克 <strong>${nasdaq?(nasdaq.changePct>=0?'+':'')+nasdaq.changePct.toFixed(2)+'%':'—'}</strong>、
+        S&P500 <strong>${sp500?(sp500.changePct>=0?'+':'')+sp500.changePct.toFixed(2)+'%':'—'}</strong>。
+        ${usBull ? '科技股強勢，AI概念族群領漲，市場風險偏好上升。' : usBear ? '科技股走弱，市場避險情緒升溫，注意控制倉位。' : '美股震盪整理，資金輪動中，選股不選市。'}
+        台積電ADR <strong>${tsm?(tsm.changePct>=0?'+':'')+tsm.changePct.toFixed(2)+'% ($'+tsm.price?.toFixed(2)+')'  :'—'}</strong>。
+      </p>
       <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px">
         <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px">⚠️ 風險提示</div>
         <p style="font-size:12px;line-height:1.7;color:var(--text2)">注意美國通膨數據及聯準會態度，地緣政治仍是潛在風險。建議保留15-20%現金，避免過度集中單一族群。</p>
       </div>
+    </div>
+
+    <!-- 台股即時分析 -->
+    <div class="card" style="border-left:3px solid ${sessionColor}">
+      <div style="font-size:10px;font-weight:700;color:${sessionColor};text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">${sessionLabel} · ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}</div>
+      <p style="font-size:13px;line-height:1.85;color:var(--text)">${buildAnalysis()}</p>
     </div>
 
     <div class="st">AI 推薦買進</div>
