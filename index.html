@@ -425,7 +425,8 @@ function renderHome() {
     if (!d) return `<div class="idx"><div class="idx-n">${name}</div><div class="idx-v"><span class="sk" style="width:60px;height:14px;"></span></div><div class="idx-c neu">—</div></div>`;
     const cls = d.change>=0?'up':'dn', s=d.change>=0?'+':'';
     const chgDisplay = Math.abs(d.change||0) >= 10 ? (d.change||0).toFixed(0) : (d.change||0).toFixed(2);
-    return `<div class="idx"><div class="idx-n">${name}</div><div class="idx-v">${fmtN(d.price)}</div><div class="idx-c ${cls}">${s}${chgDisplay} (${s}${(d.changePct||0).toFixed(2)}%)</div></div>`;
+    const yesterdayTag = d.isYesterday ? `<span style="font-size:9px;background:#f3f4f6;color:#6b7280;padding:1px 5px;border-radius:4px;margin-left:4px;font-weight:600">昨</span>` : '';
+    return `<div class="idx"><div class="idx-n">${name}${yesterdayTag}</div><div class="idx-v">${fmtN(d.price)}</div><div class="idx-c ${cls}">${s}${chgDisplay} (${s}${(d.changePct||0).toFixed(2)}%)</div></div>`;
   }
 
   let opening = {v:'⏳ 等待數據',r:'載入美股資訊中...'};
