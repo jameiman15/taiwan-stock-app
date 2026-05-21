@@ -133,6 +133,17 @@ body{font-family:'Noto Sans TC',sans-serif;color:var(--text);max-width:430px;mar
 .fi:focus,.fs:focus{outline:none;border-color:var(--text)}
 .btn{width:100%;padding:14px;background:var(--text);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:6px}
 .btn-o{width:100%;padding:12px;background:transparent;color:var(--text3);border:1px solid var(--border2);border-radius:12px;font-size:14px;cursor:pointer;font-family:inherit;margin-top:8px}
+.stock-list{max-height:200px;overflow-y:auto;border:1px solid var(--border2);border-radius:10px;margin-top:4px;background:var(--surface)}
+.stock-item{padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);font-size:13px}
+.stock-item:last-child{border-bottom:none}
+.stock-item:active{background:var(--surface2)}
+.stock-item .si-name{font-weight:500}
+.stock-item .si-code{color:var(--text3);font-family:'Space Mono',monospace;font-size:11px}
+.stock-item .si-type{font-size:10px;padding:2px 6px;border-radius:6px;font-weight:600}
+.si-stock{background:#fef2f2;color:#991b1b}
+.si-etf{background:#eff6ff;color:#1e40af}
+.search-wrap{position:relative}
+.search-clear{position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--text3);font-size:14px;display:none}
 
 /* DETAIL */
 .det-hd{display:flex;align-items:center;gap:10px;padding:14px 16px 10px;cursor:pointer;border-bottom:1px solid var(--border);background:var(--surface)}
@@ -820,37 +831,133 @@ function openAIDetail(code) {
 }
 
 // ─── MODAL ──────────────────────────────────────────────────
+// 常見個股 + ETF 清單
+const STOCK_DB = [
+  // 熱門個股
+  {code:'2330',name:'台積電',    type:'stock'},
+  {code:'2317',name:'鴻海',      type:'stock'},
+  {code:'2454',name:'聯發科',    type:'stock'},
+  {code:'2412',name:'中華電信',  type:'stock'},
+  {code:'2882',name:'國泰金',    type:'stock'},
+  {code:'2884',name:'玉山金',    type:'stock'},
+  {code:'2886',name:'兆豐金',    type:'stock'},
+  {code:'2891',name:'中信金',    type:'stock'},
+  {code:'2303',name:'聯電',      type:'stock'},
+  {code:'2379',name:'瑞昱',      type:'stock'},
+  {code:'3008',name:'大立光',    type:'stock'},
+  {code:'2308',name:'台達電',    type:'stock'},
+  {code:'2357',name:'華碩',      type:'stock'},
+  {code:'2382',name:'廣達',      type:'stock'},
+  {code:'3045',name:'台灣大',    type:'stock'},
+  {code:'4904',name:'遠傳',      type:'stock'},
+  {code:'6505',name:'台塑化',    type:'stock'},
+  {code:'1301',name:'台塑',      type:'stock'},
+  {code:'1303',name:'南亞',      type:'stock'},
+  {code:'2002',name:'中鋼',      type:'stock'},
+  // 熱門 ETF
+  {code:'0050', name:'元大台灣50',          type:'etf'},
+  {code:'0056', name:'元大高股息',          type:'etf'},
+  {code:'00878',name:'國泰永續高股息',      type:'etf'},
+  {code:'00919',name:'群益台灣精選高息',    type:'etf'},
+  {code:'00929',name:'復華台灣科技優息',    type:'etf'},
+  {code:'006208',name:'富邦台50',           type:'etf'},
+  {code:'00881',name:'國泰台灣5G+',         type:'etf'},
+  {code:'00896',name:'中信綠能及電動車',    type:'etf'},
+  {code:'00940',name:'元大台灣價值高息',    type:'etf'},
+  {code:'00943',name:'國泰半導體',          type:'etf'},
+  {code:'009816',name:'凱基台灣TOP50',      type:'etf'},
+  {code:'00900',name:'富邦特選高股息30',    type:'etf'},
+  {code:'00922',name:'國泰台灣領袖50',      type:'etf'},
+  {code:'00892',name:'富邦台灣半導體',      type:'etf'},
+];
+
 function openAddModal() {
   document.getElementById('modal')?.remove();
   const el = document.createElement('div');
   el.className = 'overlay'; el.id = 'modal';
-  el.innerHTML = `<div class="sheet">
+  el.innerHTML = `<div class="sheet" style="max-height:90vh;overflow-y:auto">
     <div class="handle"></div>
-    <div style="font-size:17px;font-weight:700;margin-bottom:18px">新增持倉</div>
-    <div class="fl"><label>類型</label>
-      <select class="fs" id="ft" onchange="toggleFundFields()">
-        <option value="stock">個股</option>
-        <option value="etf">ETF</option>
-        <option value="fund">基金</option>
-      </select>
-    </div>
+    <div style="font-size:17px;font-weight:700;margin-bottom:16px">新增持倉</div>
+
+    <!-- 帳戶 -->
     <div class="fl"><label>帳戶</label>
       <select class="fs" id="fa">${ACCOUNTS.map(a=>`<option value="${a.id}"${a.id===S.acct?' selected':''}>${a.e} ${a.name}</option>`).join('')}</select>
     </div>
-    <div class="fl"><label>名稱</label><input type="text" class="fi" id="fn" placeholder="例：台積電 / 摩根新興市場基金"></div>
+
+    <!-- 類型選擇（大按鈕） -->
+    <div class="fl"><label>類型</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div id="type-stock" onclick="selectType('stock')"
+          style="padding:10px;text-align:center;border-radius:10px;cursor:pointer;border:2px solid var(--text);background:var(--text);color:#fff;font-size:13px;font-weight:600">
+          📈 個股
+        </div>
+        <div id="type-etf" onclick="selectType('etf')"
+          style="padding:10px;text-align:center;border-radius:10px;cursor:pointer;border:2px solid var(--border2);font-size:13px;font-weight:600">
+          🗂 ETF
+        </div>
+        <div id="type-fund" onclick="selectType('fund')"
+          style="padding:10px;text-align:center;border-radius:10px;cursor:pointer;border:2px solid var(--border2);font-size:13px;font-weight:600">
+          💼 基金
+        </div>
+      </div>
+      <input type="hidden" id="ft" value="stock">
+    </div>
 
     <!-- 個股/ETF 欄位 -->
     <div id="stock-fields">
-      <div class="fl"><label>股票代碼（台股：2330，ETF：0050）</label><input type="text" class="fi" id="fc" placeholder="例：2330"></div>
-      <div class="fl"><label>平均成本（元/股）</label><input type="number" class="fi" id="fco" placeholder="每股成本"></div>
-      <div class="fl"><label>持有股數</label><input type="number" class="fi" id="fq" placeholder="例：1000"></div>
+      <!-- 搜尋快選 -->
+      <div class="fl">
+        <label>搜尋股票 / ETF</label>
+        <div class="search-wrap">
+          <input type="text" class="fi" id="fsearch" placeholder="輸入代碼或名稱，例：台積電、0050"
+            oninput="filterStocks()" autocomplete="off" autocorrect="off">
+          <span class="search-clear" id="search-clear" onclick="clearSearch()">✕</span>
+        </div>
+        <div class="stock-list" id="stock-list">
+          ${STOCK_DB.map(s=>`
+            <div class="stock-item" onclick="selectStock('${s.code}','${s.name}','${s.type}')">
+              <div><span class="si-name">${s.name}</span></div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="si-code">${s.code}</span>
+                <span class="si-type ${s.type==='etf'?'si-etf':'si-stock'}">${s.type==='etf'?'ETF':'個股'}</span>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="fl">
+        <label>已選擇</label>
+        <div id="selected-stock" style="padding:10px 14px;background:var(--surface2);border-radius:10px;font-size:13px;color:var(--text3)">
+          尚未選擇，請從上方清單選取或直接輸入
+        </div>
+      </div>
+      <div class="fl"><label>股票代碼</label>
+        <input type="text" class="fi" id="fc" placeholder="例：2330" style="text-transform:uppercase">
+      </div>
+      <div class="fl"><label>名稱</label>
+        <input type="text" class="fi" id="fn" placeholder="例：台積電">
+      </div>
+      <div class="fl"><label>平均成本（元/股）</label>
+        <input type="number" class="fi" id="fco" placeholder="每股成本">
+      </div>
+      <div class="fl"><label>持有股數</label>
+        <input type="number" class="fi" id="fq" placeholder="例：1000">
+      </div>
     </div>
 
     <!-- 基金欄位 -->
     <div id="fund-fields" style="display:none">
-      <div class="fl"><label>總投入金額（元）</label><input type="number" class="fi" id="fcost_total" placeholder="例：100000"></div>
-      <div class="fl"><label>持有單位數</label><input type="number" class="fi" id="funits" placeholder="例：1200.5"></div>
-      <div class="fl"><label>目前淨值（NAV）</label><input type="number" class="fi" id="fnav" placeholder="例：88.20"></div>
+      <div class="fl"><label>基金名稱</label>
+        <input type="text" class="fi" id="fn" placeholder="例：摩根新興市場基金">
+      </div>
+      <div class="fl"><label>總投入金額（元）</label>
+        <input type="number" class="fi" id="fcost_total" placeholder="例：100000">
+      </div>
+      <div class="fl"><label>持有單位數</label>
+        <input type="number" class="fi" id="funits" placeholder="例：1200.5">
+      </div>
+      <div class="fl"><label>目前淨值（NAV）</label>
+        <input type="number" class="fi" id="fnav" placeholder="例：88.20">
+      </div>
     </div>
 
     <button class="btn" onclick="doAdd()">確認新增</button>
@@ -858,6 +965,77 @@ function openAddModal() {
   </div>`;
   el.addEventListener('click', e=>{ if(e.target===el) el.remove(); });
   document.body.appendChild(el);
+}
+
+function selectType(type) {
+  document.getElementById('ft').value = type;
+  ['stock','etf','fund'].forEach(t => {
+    const el = document.getElementById('type-'+t);
+    if (t === type) {
+      el.style.border = '2px solid var(--text)';
+      el.style.background = 'var(--text)';
+      el.style.color = '#fff';
+    } else {
+      el.style.border = '2px solid var(--border2)';
+      el.style.background = 'transparent';
+      el.style.color = 'var(--text)';
+    }
+  });
+  // 基金時隱藏搜尋清單
+  document.getElementById('stock-fields').style.display = type === 'fund' ? 'none' : 'block';
+  document.getElementById('fund-fields').style.display  = type === 'fund' ? 'block' : 'none';
+  // 篩選清單只顯示對應類型
+  if (type !== 'fund') filterStocks();
+}
+
+function filterStocks() {
+  const q    = (document.getElementById('fsearch')?.value || '').toLowerCase();
+  const type = document.getElementById('ft').value;
+  const clear = document.getElementById('search-clear');
+  if (clear) clear.style.display = q ? 'block' : 'none';
+
+  const filtered = STOCK_DB.filter(s => {
+    const matchType = type === 'stock' ? s.type === 'stock' : type === 'etf' ? s.type === 'etf' : true;
+    const matchQ    = !q || s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q);
+    return matchType && matchQ;
+  });
+
+  const list = document.getElementById('stock-list');
+  if (!list) return;
+  list.innerHTML = filtered.map(s => `
+    <div class="stock-item" onclick="selectStock('${s.code}','${s.name}','${s.type}')">
+      <div><span class="si-name">${s.name}</span></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="si-code">${s.code}</span>
+        <span class="si-type ${s.type==='etf'?'si-etf':'si-stock'}">${s.type==='etf'?'ETF':'個股'}</span>
+      </div>
+    </div>`).join('') || '<div style="padding:12px;color:var(--text3);font-size:13px;text-align:center">找不到，請直接輸入代碼</div>';
+}
+
+function clearSearch() {
+  const s = document.getElementById('fsearch');
+  if (s) { s.value = ''; filterStocks(); s.focus(); }
+}
+
+function selectStock(code, name, type) {
+  // 填入欄位
+  const fc = document.getElementById('fc');
+  const fn = document.getElementById('fn');
+  if (fc) fc.value = code;
+  if (fn) fn.value = name;
+  // 更新類型
+  selectType(type);
+  // 更新已選擇顯示
+  const sel = document.getElementById('selected-stock');
+  if (sel) {
+    sel.style.color = 'var(--text)';
+    sel.innerHTML = `<strong>${name}</strong> <span style="color:var(--text3);font-family:monospace">${code}</span>
+      <span class="si-type ${type==='etf'?'si-etf':'si-stock'}" style="margin-left:6px">${type==='etf'?'ETF':'個股'}</span>`;
+  }
+  // 清空搜尋框，收起清單
+  const fs = document.getElementById('fsearch');
+  if (fs) fs.value = name;
+  filterStocks();
 }
 
 function toggleFundFields() {
