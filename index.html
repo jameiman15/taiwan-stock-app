@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>台股AI投資</title>
 <link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-512.png">
 <meta name="theme-color" content="#111">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
@@ -270,8 +271,15 @@ async function fetchPrices() {
   setDot('loading');
 
   try {
+    // 收集所有帳戶的持股代碼，傳給後端動態查詢
+    const allCodes = new Set();
+    Object.values(PF).forEach(acc => {
+      (acc.stocks || []).forEach(s => allCodes.add(s.code));
+    });
+    const codesParam = allCodes.size > 0 ? '?codes=' + [...allCodes].join(',') : '';
+
     // 嘗試 Vercel serverless function
-    const r = await fetch('/api/prices', {signal: AbortSignal.timeout(15000)});
+    const r = await fetch('/api/prices' + codesParam, {signal: AbortSignal.timeout(15000)});
     if (r.ok) {
       const json = await r.json();
       if (json.data && Object.keys(json.data).length > 0) {
