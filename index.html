@@ -433,16 +433,24 @@ function stockCard(s, clickable=true, showDelete=false) {
     roiH = `<div class="roi ${cls}">${pct>=0?'+':''}${pct.toFixed(1)}% (${pnl>=0?'+':''}${pnl.toLocaleString()})</div>`;
   }
   const onclick = clickable ? `onclick="openDetail('${s.code}')"` : '';
-  const delBtn = showDelete ? `<button onclick="event.stopPropagation();deleteStock('${s.code}','${S.acct}')" style="position:absolute;top:10px;right:10px;background:none;border:none;cursor:pointer;font-size:16px;color:var(--text3);padding:4px 6px;border-radius:6px;line-height:1" title="刪除">✕</button>` : '';
+  const actionBtns = showDelete ? `
+    <div style="position:absolute;top:8px;right:8px;display:flex;gap:4px">
+      <button onclick="event.stopPropagation();openEditModal('${s.code}','${S.acct}')"
+        style="background:var(--surface2);border:none;cursor:pointer;font-size:12px;color:var(--text2);padding:4px 8px;border-radius:6px;font-weight:600;font-family:inherit">
+        編輯
+      </button>
+      <button onclick="event.stopPropagation();deleteStock('${s.code}','${S.acct}')"
+        style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--text3);padding:4px 6px;border-radius:6px;line-height:1">✕</button>
+    </div>` : '';
   return `<div class="card ${accClass} ${clickable?'cp':''}" ${onclick} style="position:relative">
-    ${delBtn}
+    ${actionBtns}
     <div class="sr">
       <div class="sl">
         <h3>${s.name} <span style="font-size:11px;font-weight:400;color:var(--text3)">${s.code}</span></h3>
         <div class="meta">${s.qty.toLocaleString()}股 · 成本 $${s.cost}</div>
         ${tagH(d.a)}
       </div>
-      <div class="sr-r" style="${showDelete?'padding-right:24px':''}">
+      <div class="sr-r" style="${showDelete?'padding-right:80px':''}">
         <div class="price">${priceLine(s.code)}</div>
         <div class="chg">${p ? fmtChg(p.change, p.changePct) : '<span class="neu">---</span>'}</div>
         ${roiH}
@@ -1164,6 +1172,59 @@ function openFundAI(code, acct) {
     const resultEl = document.getElementById('fund-ai-result');
     if (resultEl) resultEl.innerHTML = '<span style="color:var(--text3)">分析失敗，請稍後再試</span>';
   });
+}
+
+function openEditModal(code, acct) {
+  const s = (PF[acct]?.stocks || []).find(x => x.code === code);
+  if (!s) return;
+  document.getElementById('edit-modal')?.remove();
+  const el = document.createElement('div');
+  el.className = 'overlay'; el.id = 'edit-modal';
+  el.innerHTML = `<div class="sheet">
+    <div class="handle"></div>
+    <div style="font-size:17px;font-weight:700;margin-bottom:4px">編輯持倉</div>
+    <div style="font-size:13px;color:var(--text3);margin-bottom:18px">${s.name} · ${s.code}</div>
+    <div class="fl">
+      <label>平均成本（元/股）</label>
+      <input type="number" class="fi" id="edit-cost" value="${s.cost}" step="0.01">
+    </div>
+    <div class="fl">
+      <label>持有股數</label>
+      <input type="number" class="fi" id="edit-qty" value="${s.qty}">
+    </div>
+    <div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:16px;font-size:12px;color:var(--text3);line-height:1.8">
+      目前成本總額：NT$<span id="edit-preview">${(s.cost*s.qty).toLocaleString()}</span>
+    </div>
+    <button class="btn" onclick="doEdit('${code}','${acct}')">確認修改</button>
+    <button class="btn-o" onclick="document.getElementById('edit-modal').remove()">取消</button>
+  </div>`;
+  // 即時預覽成本總額
+  el.querySelectorAll && setTimeout(() => {
+    const costEl = document.getElementById('edit-cost');
+    const qtyEl  = document.getElementById('edit-qty');
+    const prev   = document.getElementById('edit-preview');
+    [costEl, qtyEl].forEach(inp => inp?.addEventListener('input', () => {
+      const c = parseFloat(costEl?.value||0), q = parseInt(qtyEl?.value||0);
+      if (prev && !isNaN(c) && !isNaN(q)) prev.textContent = Math.round(c*q).toLocaleString();
+    }));
+  }, 50);
+  el.addEventListener('click', e => { if(e.target===el) el.remove(); });
+  document.body.appendChild(el);
+}
+
+function doEdit(code, acct) {
+  const cost = parseFloat(document.getElementById('edit-cost')?.value);
+  const qty  = parseInt(document.getElementById('edit-qty')?.value);
+  if (isNaN(cost) || isNaN(qty) || cost <= 0 || qty <= 0) {
+    alert('請填寫正確的成本和股數'); return;
+  }
+  const s = (PF[acct]?.stocks || []).find(x => x.code === code);
+  if (!s) return;
+  s.cost = cost;
+  s.qty  = qty;
+  savePF();
+  document.getElementById('edit-modal')?.remove();
+  renderPage(S.page);
 }
 
 function deleteStock(code, acct) {
