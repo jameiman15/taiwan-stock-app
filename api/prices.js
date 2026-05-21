@@ -12,12 +12,12 @@ export default async function handler(req, res) {
 
   // ── 1. 台股個股 + 加權指數 via Fugle ─────────────────────────────
   // Response 格式（根層）: { symbol, name, closePrice, change, changePercent, lastPrice, ... }
-  // 個股代碼
-  const TW_CODES = [
-    '2330','2317','2454','00878','0050',
-    '2412','2882','00929','2884',
-    '2379','2303','6505','3008',
-  ];
+  // 動態代碼：前端傳入 ?codes=2330,0050,... 或使用預設清單
+  const defaultCodes = ['2330','2317','2454','00878','0050','2412','2882','00929','2884','2379','2303','6505','3008'];
+  const queryCodesParam = req.query?.codes || '';
+  const extraCodes = queryCodesParam ? queryCodesParam.split(',').map(c=>c.trim().toUpperCase()).filter(Boolean) : [];
+  // 合併去重
+  const TW_CODES = [...new Set([...defaultCodes, ...extraCodes])];
 
   await Promise.allSettled(
     TW_CODES.map(async (code) => {
