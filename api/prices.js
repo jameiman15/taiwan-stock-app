@@ -14,7 +14,7 @@ export default async function handler(req, res) {
 
     // ── 1. 台股全股收盤價 (TWSE OpenAPI，免費無需 key) ──────────────
     const [twseRes, tpexRes, indexRes] = await Promise.allSettled([
-      fetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL', {
+      fetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL', {
         headers: { 'User-Agent': 'Mozilla/5.0' }
       }),
       fetch('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes', {
@@ -31,14 +31,12 @@ export default async function handler(req, res) {
       if (Array.isArray(data)) {
         data.forEach(item => {
           const code = item.Code?.trim();
-          const price  = parseFloat(item.ClosingPrice?.replace(/,/g,''));
-          const change = parseFloat(item.Change?.replace(/,/g,'').replace(/▲|▼|X/g,'') || '0');
-          const dir    = item.Change?.includes('▼') ? -1 : 1;
-          const realChange = isNaN(change) ? 0 : +(change * dir).toFixed(2);
-          const changePct  = price > 0 ? +((realChange / (price - realChange)) * 100).toFixed(2) : 0;
+          const price = parseFloat(item.ClosingPrice?.replace(/,/g, ''));
+          const avg   = parseFloat(item.MonthlyAveragePrice?.replace(/,/g, ''));
           if (code && !isNaN(price)) {
-            const avg = realChange; // reuse variable name for compatibility
-            results[code] = { price, change: realChange, changePct, name: item.Name, source: 'TWSE', ok: true };
+            const change = !isNaN(avg) ? +(price - avg).toFixed(2) : 0;
+            const changePct = !isNaN(avg) && avg !== 0 ? +((price - avg) / avg * 100).toFixed(2) : 0;
+            results[code] = { price, change, changePct, name: item.Name, source: 'TWSE', ok: true };
           }
         });
       }
@@ -62,40 +60,24 @@ export default async function handler(req, res) {
     }
 
     // ── 2. 加權指數 ────────────────────────────────────────────────
-if (indexRes.status === 'fulfilled' && indexRes.value.ok) {
-      try {
-        const data = await indexRes.value.json();
-        // 嘗試多種可能的欄位名稱
-        const rows = data?.data9 || data?.data8 || data?.data || [];
-        const taiex = rows.find(r => Array.isArray(r) && r[0] && (r[0].includes('加權') || r[0].includes('發行量')));
-        if (taiex) {
-          const price = parseFloat((taiex[1] || taiex[2] || '').replace(/,/g, ''));
-          const change = parseFloat((taiex[2] || '0').replace(/,/g, ''));
-          if (!isNaN(price) && price > 0) {
-            const changePct = price > 0 ? +((change / (price - change)) * 100).toFixed(2) : 0;
-            results['TAIEX'] = { price, change, changePct, name: '加權指數', source: 'TWSE', ok: true };
-          }
+    if (indexRes.status === 'fulfilled' && indexRes.value.ok) {
+      const data = await indexRes.value.json();
+      // MI_INDEX 回傳結構：找加權指數那筆
+      const fields = data?.fields9 || [];
+      const rows   = data?.data9   || [];
+      // 找「發行量加權股價指數」那列
+      const taiex = rows.find(r => r?.[0]?.includes('加權'));
+      if (taiex) {
+        const price     = parseFloat(taiex[1]?.replace(/,/g, ''));
+        const changePct = parseFloat(taiex[2]?.replace(/[%,]/g, ''));
+        if (!isNaN(price)) {
+          results['TAIEX'] = { price, change: 0, changePct: changePct || 0, name: '加權指數', source: 'TWSE', ok: true };
         }
-        // 如果上面找不到，直接抓另一個 API
-        if (!results['TAIEX']) {
-          const r2 = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/FMTQIK', {
-            headers: { 'User-Agent': 'Mozilla/5.0' }
-          });
-          if (r2.ok) {
-            const d2 = await r2.json();
-            if (Array.isArray(d2) && d2[0]) {
-              const price = parseFloat((d2[0].TAIEX || '').replace(/,/g, ''));
-              if (!isNaN(price) && price > 0) {
-                results['TAIEX'] = { price, change: 0, changePct: 0, name: '加權指數', source: 'TWSE', ok: true };
-              }
-            }
-          }
-        }
-      } catch(e) {}
+      }
     }
 
     // ── 3. 美股指數 via Yahoo Finance (伺服器端無 CORS 問題) ────────
-    const usSymbols = { '^DJI': '道瓊工業', '^IXIC': '那斯達克', '^GSPC': '標普500', 'TSM': '台積電ADR' };
+    const usSymbols = { '^DJI': '道瓊工業', '^IXIC': '那斯達克', '^GSPC': '標普500', 'TSM': '台積電ADR', '^SOX': '費城半導體', '^TWII': '加權指數', 'TW=F': '台指期夜盤' };
     await Promise.allSettled(
       Object.entries(usSymbols).map(async ([sym, name]) => {
         try {
@@ -107,14 +89,21 @@ if (indexRes.status === 'fulfilled' && indexRes.value.ok) {
           const d = await r.json();
           const meta = d?.chart?.result?.[0]?.meta;
           if (!meta) return;
-          const price  = meta.regularMarketPrice ?? meta.previousClose;
-          const prev   = meta.previousClose ?? price;
-          const change = +(price - prev).toFixed(2);
-          const changePct = prev !== 0 ? +((change / prev) * 100).toFixed(2) : 0;
+          const price     = meta.regularMarketPrice ?? meta.previousClose;
+          const prev      = meta.chartPreviousClose ?? meta.previousClose ?? price;
+          // 優先用 API 直接給的漲跌值，最準確
+          const change    = meta.regularMarketChange != null
+            ? +meta.regularMarketChange.toFixed(2)
+            : +(price - prev).toFixed(2);
+          const changePct = meta.regularMarketChangePercent != null
+            ? +meta.regularMarketChangePercent.toFixed(2)
+            : (prev !== 0 ? +((change / prev) * 100).toFixed(2) : 0);
           results[sym] = { price, change, changePct, name, source: 'Yahoo', ok: true };
         } catch (e) {}
       })
     );
+    // 讓加權指數同時存為 TAIEX key（前端用）
+    if (results['^TWII']) results['TAIEX'] = { ...results['^TWII'] };
 
     return res.status(200).json({ ok: true, data: results, updatedAt: new Date().toISOString() });
   } catch (err) {
