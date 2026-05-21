@@ -12,11 +12,11 @@ export default async function handler(req, res) {
 
   // ── 1. 台股個股 + 加權指數 via Fugle ─────────────────────────────
   // Response 格式（根層）: { symbol, name, closePrice, change, changePercent, lastPrice, ... }
+  // 個股代碼
   const TW_CODES = [
     '2330','2317','2454','00878','0050',
     '2412','2882','00929','2884',
     '2379','2303','6505','3008',
-    'TAIEX', // 加權指數
   ];
 
   await Promise.allSettled(
@@ -28,22 +28,43 @@ export default async function handler(req, res) {
         );
         if (!r.ok) return;
         const d = await r.json();
-        // Fugle 盤中回傳 lastPrice，盤後回傳 closePrice
         const price = d.lastPrice ?? d.closePrice ?? d.previousClose;
         if (!price || price <= 0) return;
         const change    = d.change ?? 0;
         const changePct = d.changePercent ?? 0;
         const name      = d.name || code;
-        const storeKey  = code === 'TAIEX' ? 'TAIEX' : code;
-        results[storeKey] = { price, change: +change.toFixed(2), changePct: +changePct.toFixed(2), name, source: 'Fugle', ok: true };
+        results[code] = { price, change: +change.toFixed(2), changePct: +changePct.toFixed(2), name, source: 'Fugle', ok: true };
       } catch(e) {}
     })
   );
 
-  // ── 2. 台指期夜盤 via Fugle ───────────────────────────────────────
+  // ── 2. 加權指數 via Fugle（代碼 IX0001）──────────────────────────
   try {
     const r = await fetch(
-      `${FUGLE}/intraday/quote/TXF`,
+      `${FUGLE}/intraday/quote/IX0001`,
+      { headers: { 'X-API-KEY': FUGLE_KEY }, signal: AbortSignal.timeout(5000) }
+    );
+    if (r.ok) {
+      const d = await r.json();
+      const price = d.lastPrice ?? d.closePrice ?? d.previousClose;
+      if (price && price > 0) {
+        results['TAIEX'] = {
+          price,
+          change: +(d.change ?? 0).toFixed(2),
+          changePct: +(d.changePercent ?? 0).toFixed(2),
+          name: '加權指數',
+          source: 'Fugle',
+          ok: true
+        };
+      }
+    }
+  } catch(e) {}
+
+  // ── 3. 台指期近月 via Fugle futopt endpoint ───────────────────────
+  // 台指期近月代碼格式：TXF + 月份碼，用 snapshot 抓最近月份
+  try {
+    const r = await fetch(
+      'https://api.fugle.tw/marketdata/v1.0/futopt/intraday/quote/TXFC5',
       { headers: { 'X-API-KEY': FUGLE_KEY }, signal: AbortSignal.timeout(5000) }
     );
     if (r.ok) {
@@ -54,7 +75,7 @@ export default async function handler(req, res) {
           price,
           change: +(d.change ?? 0).toFixed(2),
           changePct: +(d.changePercent ?? 0).toFixed(2),
-          name: '台指期夜盤',
+          name: '台指期',
           source: 'Fugle',
           ok: true
         };
