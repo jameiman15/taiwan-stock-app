@@ -61,26 +61,42 @@ export default async function handler(req, res) {
   } catch(e) {}
 
   // ── 3. 台指期近月 via Fugle futopt endpoint ───────────────────────
-  // 台指期夜盤 15:45 開盤，若未開盤則顯示昨日收盤價
+  // 台指期代碼格式：TXF + 月份英文字母 + 年份末碼
+  // 月份對照：1=A 2=B 3=C 4=D 5=E 6=F 7=G 8=H 9=I 10=J 11=K 12=L
   try {
-    const r = await fetch(
-      'https://api.fugle.tw/marketdata/v1.0/futopt/intraday/quote/TXFC5',
-      { headers: { 'X-API-KEY': FUGLE_KEY }, signal: AbortSignal.timeout(5000) }
-    );
-    if (r.ok) {
-      const d = await r.json();
-      // lastPrice 有值且有成交量 → 夜盤已開盤
-      const isOpen = d.lastPrice && d.total?.tradeVolume > 0;
-      const price  = isOpen ? d.lastPrice : (d.closePrice ?? d.previousClose);
+    const now = new Date();
+    const monthCodes = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+    const yr = String(now.getFullYear()).slice(-1);
+    // 嘗試當月和下月（台指期到期前夕近月會換）
+    const months = [now.getMonth(), (now.getMonth()+1) % 12];
+    let txfData = null;
+    for (const m of months) {
+      const sym = `TXF${monthCodes[m]}${yr}`;
+      try {
+        const r = await fetch(
+          `https://api.fugle.tw/marketdata/v1.0/futopt/intraday/quote/${sym}`,
+          { headers: { 'X-API-KEY': FUGLE_KEY }, signal: AbortSignal.timeout(5000) }
+        );
+        if (r.ok) {
+          const d = await r.json();
+          if (d && (d.lastPrice || d.closePrice || d.previousClose)) {
+            txfData = d; break;
+          }
+        }
+      } catch(e2) {}
+    }
+    if (txfData) {
+      const isOpen = txfData.lastPrice && (txfData.total?.tradeVolume ?? 0) > 0;
+      const price  = isOpen ? txfData.lastPrice : (txfData.closePrice ?? txfData.previousClose);
       if (price && price > 0) {
         results['TW=F'] = {
           price,
-          change:    +(d.change ?? 0).toFixed(2),
-          changePct: +(d.changePercent ?? 0).toFixed(2),
-          name:      '台指期',
-          isYesterday: !isOpen,   // 前端用來顯示「昨」標籤
-          source:    'Fugle',
-          ok:        true
+          change:      +(txfData.change ?? 0).toFixed(2),
+          changePct:   +(txfData.changePercent ?? 0).toFixed(2),
+          name:        '台指期',
+          isYesterday: !isOpen,
+          source:      'Fugle',
+          ok:          true
         };
       }
     }
