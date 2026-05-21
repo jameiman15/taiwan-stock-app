@@ -31,11 +31,13 @@ export default async function handler(req, res) {
       if (Array.isArray(data)) {
         data.forEach(item => {
           const code = item.Code?.trim();
-          const price = parseFloat(item.ClosingPrice?.replace(/,/g, ''));
-          const avg   = parseFloat(item.MonthlyAveragePrice?.replace(/,/g, ''));
+          const price  = parseFloat(item.ClosingPrice?.replace(/,/g,''));
+          const change = parseFloat(item.Change?.replace(/,/g,'').replace(/▲|▼|X/g,'') || '0');
+          const dir    = item.Change?.includes('▼') ? -1 : 1;
+          const realChange = isNaN(change) ? 0 : +(change * dir).toFixed(2);
+          const changePct  = price > 0 ? +((realChange / (price - realChange)) * 100).toFixed(2) : 0;
           if (code && !isNaN(price)) {
-            const change = !isNaN(avg) ? +(price - avg).toFixed(2) : 0;
-            const changePct = !isNaN(avg) && avg !== 0 ? +((price - avg) / avg * 100).toFixed(2) : 0;
+            const avg = realChange; // reuse variable name for compatibility
             results[code] = { price, change, changePct, name: item.Name, source: 'TWSE', ok: true };
           }
         });
