@@ -180,11 +180,13 @@ body{font-family:'Noto Sans TC',sans-serif;color:var(--text);max-width:430px;mar
 <script>
 // ─── CONSTANTS ─────────────────────────────────────────────
 const ACCOUNTS = [
-  {id:'self',  name:'我',   e:'👤'},
-  {id:'family',name:'家庭', e:'🏠'},
-  {id:'wife',  name:'老婆', e:'💑'},
-  {id:'kid',   name:'小孩', e:'🧒'},
-  {id:'mom',   name:'媽媽', e:'👩'},
+  {id:'self',   name:'我',     e:'👤'},
+  {id:'family', name:'家庭',   e:'🏠'},
+  {id:'wife',   name:'老婆',   e:'💑'},
+  {id:'kid',    name:'小孩',   e:'🧒'},
+  {id:'mom',    name:'媽媽',   e:'👩'},
+  {id:'mil_me', name:'岳母-我', e:'👵'},
+  {id:'mil_fam',name:'岳母-家庭',e:'🏡'},
 ];
 
 const DEFAULT_PF = {
@@ -482,7 +484,39 @@ function renderPortfolio() {
     <div class="st" style="margin-top:8px">ETF (${etfs.length})</div>
     ${etfs.length ? etfs.map(s=>stockCard(s,true,true)).join('') : '<div style="color:var(--text3);font-size:13px;padding:8px 0">尚無ETF</div>'}
     <div class="st" style="margin-top:8px">基金 (${funds.length})</div>
-    ${funds.length ? funds.map(f=>`<div class="card"><div class="sr"><div class="sl"><h3 style="font-size:14px">${f.name}</h3><div class="meta">淨值 $${f.nav} · ${f.units}單位</div></div><div class="sr-r"><div class="price" style="font-size:14px">NT$${Math.round(f.nav*f.units).toLocaleString()}</div><div class="chg neu">基金</div></div></div></div>`).join('') : '<div style="color:var(--text3);font-size:13px;padding:8px 0">尚無基金</div>'}
+    ${funds.length ? funds.map(f=>{
+      const mv   = f.nav * f.units;
+      const roi  = f.cost > 0 ? ((mv - f.cost) / f.cost * 100).toFixed(1) : 0;
+      const pnl  = Math.round(mv - f.cost);
+      const cls  = pnl >= 0 ? 'up' : 'dn';
+      return `<div class="card" style="position:relative">
+        <button onclick="deleteFund('${f.code}','${S.acct}')" style="position:absolute;top:10px;right:10px;background:none;border:none;cursor:pointer;font-size:16px;color:var(--text3);padding:4px 6px;border-radius:6px" title="刪除">✕</button>
+        <div class="sr">
+          <div class="sl">
+            <h3 style="font-size:14px;padding-right:24px">${f.name}</h3>
+            <div class="meta" style="display:flex;align-items:center;gap:6px;margin-top:2px">
+              淨值
+              <input type="number" value="${f.nav}"
+                style="width:72px;border:1px solid var(--border2);border-radius:6px;padding:2px 6px;font-size:12px;font-family:monospace;background:var(--surface2)"
+                onchange="updateFundNav('${f.code}','${S.acct}',this.value)"
+                onclick="event.stopPropagation()">
+              元 · ${f.units}單位
+            </div>
+            <div class="meta" style="margin-top:2px">投入 NT$${f.cost.toLocaleString()}</div>
+          </div>
+          <div class="sr-r">
+            <div class="price" style="font-size:14px">NT$${Math.round(mv).toLocaleString()}</div>
+            <div class="roi ${cls}" style="font-size:12px;margin-top:3px">${roi>=0?'+':''}${roi}% (${pnl>=0?'+':''}${pnl.toLocaleString()})</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+          <button onclick="openFundAI('${f.code}','${S.acct}')"
+            style="flex:1;padding:8px;background:var(--text);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">
+            🤖 AI 分析加倉建議
+          </button>
+        </div>
+      </div>`;
+    }).join('') : '<div style="color:var(--text3);font-size:13px;padding:8px 0">尚無基金</div>'}
     <div style="height:20px"></div>`;
 }
 
@@ -744,13 +778,33 @@ function openAddModal() {
   el.className = 'overlay'; el.id = 'modal';
   el.innerHTML = `<div class="sheet">
     <div class="handle"></div>
-    <div style="font-size:17px;font-weight:700;margin-bottom:18px">新增持股</div>
-    <div class="fl"><label>股票代碼（台股：2330，ETF：0050）</label><input type="text" class="fi" id="fc" placeholder="例：2330"></div>
-    <div class="fl"><label>名稱</label><input type="text" class="fi" id="fn" placeholder="例：台積電"></div>
-    <div class="fl"><label>類型</label><select class="fs" id="ft"><option value="stock">個股</option><option value="etf">ETF</option></select></div>
-    <div class="fl"><label>帳戶</label><select class="fs" id="fa">${ACCOUNTS.map(a=>`<option value="${a.id}"${a.id===S.acct?' selected':''}>${a.e} ${a.name}</option>`).join('')}</select></div>
-    <div class="fl"><label>平均成本（元）</label><input type="number" class="fi" id="fco" placeholder="每股成本"></div>
-    <div class="fl"><label>股數</label><input type="number" class="fi" id="fq" placeholder="持有股數"></div>
+    <div style="font-size:17px;font-weight:700;margin-bottom:18px">新增持倉</div>
+    <div class="fl"><label>類型</label>
+      <select class="fs" id="ft" onchange="toggleFundFields()">
+        <option value="stock">個股</option>
+        <option value="etf">ETF</option>
+        <option value="fund">基金</option>
+      </select>
+    </div>
+    <div class="fl"><label>帳戶</label>
+      <select class="fs" id="fa">${ACCOUNTS.map(a=>`<option value="${a.id}"${a.id===S.acct?' selected':''}>${a.e} ${a.name}</option>`).join('')}</select>
+    </div>
+    <div class="fl"><label>名稱</label><input type="text" class="fi" id="fn" placeholder="例：台積電 / 摩根新興市場基金"></div>
+
+    <!-- 個股/ETF 欄位 -->
+    <div id="stock-fields">
+      <div class="fl"><label>股票代碼（台股：2330，ETF：0050）</label><input type="text" class="fi" id="fc" placeholder="例：2330"></div>
+      <div class="fl"><label>平均成本（元/股）</label><input type="number" class="fi" id="fco" placeholder="每股成本"></div>
+      <div class="fl"><label>持有股數</label><input type="number" class="fi" id="fq" placeholder="例：1000"></div>
+    </div>
+
+    <!-- 基金欄位 -->
+    <div id="fund-fields" style="display:none">
+      <div class="fl"><label>總投入金額（元）</label><input type="number" class="fi" id="fcost_total" placeholder="例：100000"></div>
+      <div class="fl"><label>持有單位數</label><input type="number" class="fi" id="funits" placeholder="例：1200.5"></div>
+      <div class="fl"><label>目前淨值（NAV）</label><input type="number" class="fi" id="fnav" placeholder="例：88.20"></div>
+    </div>
+
     <button class="btn" onclick="doAdd()">確認新增</button>
     <button class="btn-o" onclick="document.getElementById('modal').remove()">取消</button>
   </div>`;
@@ -758,20 +812,132 @@ function openAddModal() {
   document.body.appendChild(el);
 }
 
+function toggleFundFields() {
+  const type = document.getElementById('ft').value;
+  document.getElementById('stock-fields').style.display = type === 'fund' ? 'none' : 'block';
+  document.getElementById('fund-fields').style.display  = type === 'fund' ? 'block' : 'none';
+}
+
 function doAdd() {
-  const code = document.getElementById('fc').value.trim().toUpperCase();
-  const name = document.getElementById('fn').value.trim();
   const type = document.getElementById('ft').value;
   const acct = document.getElementById('fa').value;
-  const cost = parseFloat(document.getElementById('fco').value);
-  const qty  = parseInt(document.getElementById('fq').value);
-  if(!code||!name||isNaN(cost)||isNaN(qty)){alert('請填寫完整資訊');return;}
-  if(!PF[acct]) PF[acct]={stocks:[],funds:[]};
-  PF[acct].stocks = PF[acct].stocks||[];
-  PF[acct].stocks.push({code,name,type,cost,qty,account:acct});
+  const name = document.getElementById('fn').value.trim();
+  if (!name) { alert('請填寫名稱'); return; }
+  if (!PF[acct]) PF[acct] = {stocks:[], funds:[]};
+
+  if (type === 'fund') {
+    const cost  = parseFloat(document.getElementById('fcost_total').value);
+    const units = parseFloat(document.getElementById('funits').value);
+    const nav   = parseFloat(document.getElementById('fnav').value);
+    if (isNaN(cost)||isNaN(units)||isNaN(nav)) { alert('請填寫完整基金資訊'); return; }
+    const code = 'FUND_' + Date.now();
+    PF[acct].funds = PF[acct].funds || [];
+    PF[acct].funds.push({code, name, type:'fund', cost, units, nav});
+  } else {
+    const code = document.getElementById('fc').value.trim().toUpperCase();
+    const costPer = parseFloat(document.getElementById('fco').value);
+    const qty  = parseInt(document.getElementById('fq').value);
+    if (!code||isNaN(costPer)||isNaN(qty)) { alert('請填寫完整資訊'); return; }
+    PF[acct].stocks = PF[acct].stocks || [];
+    PF[acct].stocks.push({code, name, type, cost:costPer, qty, account:acct});
+  }
   savePF();
   document.getElementById('modal').remove();
   S.acct = acct; renderTabs(); go('portfolio');
+}
+
+function deleteFund(code, acct) {
+  if (!confirm('確定要刪除這筆基金？')) return;
+  if (!PF[acct]?.funds) return;
+  PF[acct].funds = PF[acct].funds.filter(f => f.code !== code);
+  savePF(); renderPage(S.page);
+}
+
+function updateFundNav(code, acct, val) {
+  const nav = parseFloat(val);
+  if (isNaN(nav) || nav <= 0) return;
+  const fund = (PF[acct]?.funds || []).find(f => f.code === code);
+  if (!fund) return;
+  fund.nav = nav;
+  savePF();
+  renderPage(S.page); // 重新渲染讓損益即時更新
+}
+
+function openFundAI(code, acct) {
+  const fund = (PF[acct]?.funds || []).find(f => f.code === code);
+  if (!fund) return;
+
+  // 建立 AI 分析 overlay
+  document.getElementById('fund-ai-modal')?.remove();
+  const el = document.createElement('div');
+  el.className = 'overlay'; el.id = 'fund-ai-modal';
+  const mv   = fund.nav * fund.units;
+  const roi  = fund.cost > 0 ? ((mv - fund.cost) / fund.cost * 100).toFixed(1) : 0;
+  const pnl  = Math.round(mv - fund.cost);
+
+  el.innerHTML = `<div class="sheet" style="max-height:80vh;overflow-y:auto">
+    <div class="handle"></div>
+    <div style="font-size:17px;font-weight:700;margin-bottom:4px">🤖 AI 基金分析</div>
+    <div style="font-size:13px;color:var(--text3);margin-bottom:16px">${fund.name}</div>
+    <div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:16px;font-size:13px;line-height:1.8">
+      <div>📊 投入金額：NT$${fund.cost.toLocaleString()}</div>
+      <div>💰 目前市值：NT$${Math.round(mv).toLocaleString()}</div>
+      <div>📈 未實現損益：<span class="${pnl>=0?'up':'dn'}">${pnl>=0?'+':''}${roi}% (${pnl>=0?'+':''}NT$${Math.abs(pnl).toLocaleString()})</span></div>
+      <div>📋 淨值：$${fund.nav} × ${fund.units}單位</div>
+    </div>
+    <div id="fund-ai-result" style="font-size:13px;line-height:1.85;color:var(--text);min-height:80px">
+      <div style="text-align:center;padding:20px;color:var(--text3)">⏳ AI 分析中...</div>
+    </div>
+    <button class="btn-o" style="margin-top:16px" onclick="document.getElementById('fund-ai-modal').remove()">關閉</button>
+  </div>`;
+  el.addEventListener('click', e => { if(e.target===el) el.remove(); });
+  document.body.appendChild(el);
+
+  // 呼叫 Claude API
+  const taiex = gP('TAIEX'), sp500 = gP('^GSPC'), sox = gP('^SOX');
+  const marketCtx = [
+    taiex ? `台灣加權指數 ${taiex.price?.toLocaleString()} 點（${taiex.changePct>=0?'+':''}${taiex.changePct}%）` : '',
+    sp500 ? `S&P500 ${sp500.price?.toFixed(0)}（${sp500.changePct>=0?'+':''}${sp500.changePct}%）` : '',
+    sox   ? `費城半導體 ${sox.price?.toFixed(0)}（${sox.changePct>=0?'+':''}${sox.changePct}%）` : '',
+  ].filter(Boolean).join('、');
+
+  fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      messages: [{
+        role: 'user',
+        content: `你是一位專業的台灣基金投資顧問，請用繁體中文分析以下基金的投資狀況並給出建議。
+
+基金名稱：${fund.name}
+投入成本：NT$${fund.cost.toLocaleString()}
+目前市值：NT$${Math.round(mv).toLocaleString()}
+未實現損益：${roi >= 0 ? '+' : ''}${roi}%
+目前市場：${marketCtx || '資料載入中'}
+
+請分析：
+1. 【目前狀況】這檔基金的近期表現與市場環境評估（2-3句）
+2. 【操作建議】加倉 / 續抱 / 減碼 / 觀察，並說明理由（2-3句）
+3. 【風險提示】需要注意的風險（1-2句）
+
+格式要簡潔，適合手機閱讀。`
+      }]
+    })
+  })
+  .then(r => r.json())
+  .then(d => {
+    const text = d?.content?.[0]?.text || '分析失敗，請稍後再試';
+    const resultEl = document.getElementById('fund-ai-result');
+    if (resultEl) {
+      resultEl.innerHTML = text.replace(/\n/g,'<br>').replace(/【([^】]+)】/g,'<strong style="color:var(--text)">【$1】</strong>');
+    }
+  })
+  .catch(e => {
+    const resultEl = document.getElementById('fund-ai-result');
+    if (resultEl) resultEl.innerHTML = '<span style="color:var(--text3)">分析失敗，請稍後再試</span>';
+  });
 }
 
 function deleteStock(code, acct) {
