@@ -244,7 +244,7 @@ const NEWS = [
 // ─── STATE ─────────────────────────────────────────────────
 let S = {
   acct:'self', page:'home', prevPage:'home',
-  prices:{}, loading:true, lastUpd:null,
+  prices:{}, pricesOk:false, loading:true, lastUpd:null,
   alerts:{}, alertPrices:{},
 };
 
@@ -269,11 +269,12 @@ async function fetchPrices() {
 
   try {
     // 嘗試 Vercel serverless function
-    const r = await fetch('/api/prices', {signal: AbortSignal.timeout(12000)});
+    const r = await fetch('/api/prices', {signal: AbortSignal.timeout(15000)});
     if (r.ok) {
       const json = await r.json();
-      if (json.ok && json.data) {
+      if (json.data && Object.keys(json.data).length > 0) {
         S.prices = json.data;
+        S.pricesOk = true;
         S.loading = false;
         S.lastUpd = new Date();
         setDot('ok');
@@ -281,7 +282,7 @@ async function fetchPrices() {
         return;
       }
     }
-  } catch {}
+  } catch(e) { console.log('api/prices error:', e); }
 
   // Fallback：直接呼叫 TWSE OpenAPI（無需 proxy，CORS 對部分瀏覽器開放）
   try {
@@ -435,7 +436,7 @@ function renderHome() {
     else opening = {v:'➡️ 盤整，選股不選市',r:`美股小幅震盪，台股跟隨盤整。聚焦個股題材，績優股為主，避免追高。`};
   }
 
-  const isErr = !S.loading && !Object.values(S.prices).some(p=>p.ok);
+  const isErr = !S.loading && !S.pricesOk;
 
   document.getElementById('p-home').innerHTML = `
     ${isErr ? `<div class="api-warn">⚠️ 股價 API 目前離線。請確認已部署到 Vercel，或點右上角重新整理。</div>` : ''}
