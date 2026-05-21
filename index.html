@@ -244,6 +244,45 @@ const NEWS = [
   {src:'🇹🇼 鉅亨網',  t:'外資連續10日買超台股，資金持續流入半導體族群',tm:'7小時前',tag:'外資'},
 ];
 
+// ─── SUPABASE 同步 ─────────────────────────────────────────
+const SB_URL = 'https://boewvtbfgwfdeyedlvel.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvZXd2dGJmZ3dmZGV5ZWRsdmVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNTAwNzUsImV4cCI6MjA5NDkyNjA3NX0.TroHsFN70LE_g5J_m3K9LP7yrx7WH2v7VYpk6kBqMsc';
+const SB_HEADERS = {
+  'apikey': SB_KEY,
+  'Authorization': 'Bearer ' + SB_KEY,
+  'Content-Type': 'application/json',
+  'Prefer': 'resolution=merge-duplicates',
+};
+
+// 從雲端讀取持倉
+async function loadFromCloud() {
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/portfolios?id=eq.main`, {
+      headers: SB_HEADERS, signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) return false;
+    const rows = await r.json();
+    if (rows.length > 0 && rows[0].data) {
+      PF = rows[0].data;
+      try { localStorage.setItem('pf_v3', JSON.stringify(PF)); } catch {}
+      return true;
+    }
+    return false;
+  } catch(e) { return false; }
+}
+
+// 儲存持倉到雲端
+async function saveToCloud() {
+  try {
+    await fetch(`${SB_URL}/rest/v1/portfolios`, {
+      method: 'POST',
+      headers: SB_HEADERS,
+      body: JSON.stringify({ id: 'main', data: PF, updated_at: new Date().toISOString() }),
+      signal: AbortSignal.timeout(8000)
+    });
+  } catch(e) {}
+}
+
 // ─── STATE ─────────────────────────────────────────────────
 let S = {
   acct:'self', page:'home', prevPage:'home',
@@ -257,6 +296,7 @@ let PF = (() => {
 
 function savePF() {
   try { localStorage.setItem('pf_v3', JSON.stringify(PF)); } catch {}
+  saveToCloud(); // 同步到雲端
 }
 
 try {
@@ -980,6 +1020,10 @@ function go(page) {
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
   document.getElementById('nb-'+page)?.classList.add('on');
   renderPage(page);
+  // 若股價還沒載入完，切頁後自動重試一次
+  if (S.loading) {
+    fetchPrices().then(() => renderPage(page));
+  }
 }
 
 function renderTabs() {
@@ -996,11 +1040,29 @@ function setAcct(id) {
 renderTabs();
 renderHome();
 
-fetchPrices().then(()=>{
+// 確保 fetch 完成後重渲染當前頁面（解決持倉頁股價空白問題）
+async function fetchAndRender() {
+  await fetchPrices();
   renderPage(S.page);
-  // 每 60 秒自動更新
-  setInterval(()=>fetchPrices().then(()=>renderPage(S.page)), 60000);
-});
+  if (S.page !== 'home') renderHome();
+}
+
+// 啟動：先從雲端同步持倉，再抓股價
+(async () => {
+  // 顯示同步中提示
+  setDot('loading');
+  document.getElementById('upd').textContent = '同步中...';
+
+  const synced = await loadFromCloud();
+  if (synced) {
+    renderTabs();   // 更新帳戶 tab
+    renderPage(S.page); // 更新頁面顯示
+  }
+
+  // 同步完成後抓股價
+  await fetchAndRender();
+  setInterval(fetchAndRender, 60000);
+})();
 </script>
 </body>
 </html>
