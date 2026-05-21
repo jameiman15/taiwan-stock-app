@@ -61,7 +61,7 @@ export default async function handler(req, res) {
   } catch(e) {}
 
   // ── 3. 台指期近月 via Fugle futopt endpoint ───────────────────────
-  // 台指期近月代碼格式：TXF + 月份碼，用 snapshot 抓最近月份
+  // 台指期夜盤 15:45 開盤，若未開盤則顯示昨日收盤價
   try {
     const r = await fetch(
       'https://api.fugle.tw/marketdata/v1.0/futopt/intraday/quote/TXFC5',
@@ -69,15 +69,18 @@ export default async function handler(req, res) {
     );
     if (r.ok) {
       const d = await r.json();
-      const price = d.lastPrice ?? d.closePrice;
+      // lastPrice 有值且有成交量 → 夜盤已開盤
+      const isOpen = d.lastPrice && d.total?.tradeVolume > 0;
+      const price  = isOpen ? d.lastPrice : (d.closePrice ?? d.previousClose);
       if (price && price > 0) {
         results['TW=F'] = {
           price,
-          change: +(d.change ?? 0).toFixed(2),
+          change:    +(d.change ?? 0).toFixed(2),
           changePct: +(d.changePercent ?? 0).toFixed(2),
-          name: '台指期',
-          source: 'Fugle',
-          ok: true
+          name:      '台指期',
+          isYesterday: !isOpen,   // 前端用來顯示「昨」標籤
+          source:    'Fugle',
+          ok:        true
         };
       }
     }
