@@ -423,7 +423,13 @@ function priceLine(code) {
 
 function stockCard(s, clickable=true, showDelete=false) {
   const p = gP(s.code);
-  const d = DIAG[s.code] || {a:'hold',l:'續抱',r:''};
+  // 完全用即時損益動態判斷（不用靜態 DIAG，確保與健診一致）
+  const _roi = p ? ((p.price - s.cost) / s.cost * 100) : 0;
+  const d = _roi >= 30  ? {a:'sell',  l:'獲利了結'} :
+            _roi <= -10 ? {a:'stop',  l:'評估停損'} :
+            p && p.changePct >= 1  ? {a:'hold',  l:'續抱'} :
+            p && p.changePct <= -2 ? {a:'watch', l:'觀察'} :
+            {a:'hold', l:'續抱'};
   const accClass = p ? (p.change >= 0 ? 'acc-up' : 'acc-dn') : '';
   let roiH = '';
   if (p?.price) {
@@ -846,12 +852,20 @@ function renderAI() {
     ${(acc.stocks||[]).map(s=>{
       const d = DIAG[s.code]; if(!d) return '';
       const p = gP(s.code);
+      const _roi2 = p ? ((p.price - s.cost) / s.cost * 100) : 0;
+      const dynD = DIAG[s.code] || (
+        _roi2 >= 30  ? {a:'sell', l:'獲利了結', r:'持倉已大幅獲利，建議分批出場，鎖定利潤。'} :
+        _roi2 <= -10 ? {a:'stop', l:'評估停損', r:'虧損逾10%，建議重新評估，若基本面無改變可續抱，否則考慮停損。'} :
+        p && p.changePct >= 1  ? {a:'hold', l:'續抱',  r:'今日表現偏強，可續抱持有，設好停利點。'} :
+        p && p.changePct <= -2 ? {a:'watch',l:'觀察',  r:'今日小幅拉回，觀察量縮是否止穩，暫不加碼。'} :
+        {a:'hold', l:'續抱', r:'持倉穩健，建議持續追蹤基本面，等待明確訊號。'}
+      );
       const am = {sell:'acc-up',hold:'',watch:'acc-bl',add:'acc-dn',stop:'acc-up'};
-      return `<div class="card ${am[d.a]||''}">
-        <div class="sr"><div class="sl"><h3>${s.name}</h3>${tagH(d.a)}</div>
+      return `<div class="card ${am[dynD.a]||''}">
+        <div class="sr"><div class="sl"><h3>${s.name}</h3>${tagH(dynD.a)}</div>
           <div class="sr-r"><div class="price">${p?'$'+fmtN(p.price):'---'}</div></div>
         </div>
-        <div style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.7">${d.r}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.7">${dynD.r}</div>
       </div>`;
     }).join('')}
     <div style="height:20px"></div>`;
@@ -1036,13 +1050,18 @@ function openDetail(code) {
                   pct >= 30  ? '目前持倉獲利 ' + pct.toFixed(1) + '%，建議分批獲利了結，保留部分持股續抱。' :
                   '持倉損益 ' + (pct>=0?'+':'') + pct.toFixed(1) + '%，風險尚在可控範圍，持續追蹤基本面。';
 
-    var action = pct >= 30 ? '▼ 獲利了結' : pct <= -10 ? '⚠ 評估停損' :
-                 (p && p.changePct >= 1) ? '⏸ 續抱' : (p && p.changePct <= -2) ? '👁 觀察' : '⏸ 續抱';
+    // 優先用損益判斷（和卡片標籤一致）
+    var action = pct >= 30  ? '▼ 獲利了結（+' + pct.toFixed(0) + '%）' :
+                 pct <= -10 ? '⚠ 評估停損（' + pct.toFixed(0) + '%）' :
+                 pct >= 15  ? '💰 續抱觀察獲利點（+' + pct.toFixed(0) + '%）' :
+                 (p && p.changePct >= 1)  ? '⏸ 續抱（今日偏強）' :
+                 (p && p.changePct <= -2) ? '👁 觀察（今日拉回）' : '⏸ 續抱';
 
-    var advStr = pct >= 30  ? '持倉已大幅獲利，建議分批出場（賣 1/3），鎖定利潤，剩餘續抱等待更高目標。' :
-                 pct <= -10 ? '虧損逾 10%，建議重新評估持股邏輯，若基本面無改變可續抱，否則考慮停損。' :
-                 (p && p.changePct >= 0) ? '今日表現偏強，可續抱持有。若繼續上漲注意前高停利；若轉弱以成本價為守。' :
-                 '今日小幅拉回，屬正常整理，量縮回檔為正常修正，不需急於停損。';
+    var advStr = act.a === 'sell'  ? '持倉已大幅獲利（+' + pct.toFixed(1) + '%），建議分批出場（先賣 1/3），鎖定利潤，剩餘續抱等待更高目標。' :
+                 act.a === 'stop'  ? '虧損已逾 10%（' + pct.toFixed(1) + '%），建議重新評估持股邏輯，若基本面無改變可續抱，否則考慮停損出場。' :
+                 act.a === 'watch' ? '今日走弱，短線觀察是否有量縮止跌訊號，未見止跌前暫緩加碼，以成本價為停損參考。' :
+                 (p && p.changePct >= 0) ? '今日表現偏強，可續抱持有。若繼續上漲注意前高附近停利；若轉弱以成本價為守。' :
+                 '今日小幅拉回，屬正常整理，量縮回檔為正常修正，不需急於停損，持續觀察。';
 
     var bgColor  = pct >= 0 ? '#ecfdf5' : '#fef2f2';
     var txtColor = pct >= 0 ? '#166534' : '#991b1b';
