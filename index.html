@@ -793,11 +793,7 @@ S&P500：${_sp500 ? (_sp500.changePct>=0?'+':'')+_sp500.changePct?.toFixed(2)+'%
     const text = d?.content?.[0]?.text || '';
     const el = document.getElementById('sector-card');
     if (el && text) {
-      el.innerHTML = `<div style="font-size:13px;line-height:1.9;color:var(--text)">
-        ${text.replace(/
-/g,'<br>').replace(/(🚀|👁|⚠️|💡)[^
-<]*/g, m => `<div style="margin:6px 0">${m}</div>`)}
-      </div>`;
+      el.innerHTML = '<div style="font-size:13px;line-height:1.9;color:var(--text)">' + text.split('\n').join('<br>') + '</div>';
     }
   })
   .catch(() => {
@@ -1029,8 +1025,7 @@ function openDetail(code) {
     const el = document.getElementById('diag-result');
     if (el) {
       el.innerHTML = text
-        .replace(/
-/g,'<br>')
+        .split('\n').join('<br>')
         .replace(/【([^】]+)】/g,'<br><strong style="color:#6b21a8;font-size:12px">【$1】</strong><br>')
         .replace(/^<br>/,'');
     }
