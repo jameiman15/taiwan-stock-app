@@ -1068,30 +1068,54 @@ function openDetail(code) {
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
 
 
-  // Gemini AI 即時健診
+  // 先抓 K 線再做 AI 健診
   (function(){
     var _tD=gP('TAIEX'), _sD=gP('^SOX');
-    var prompt='你是台灣股市分析師，請用繁體中文分析以下持股，格式簡潔適合手機閱讀。\n'
-      +'股票：'+s.name+'（'+s.code+'）\n'
-      +'類型：'+(s.type==='stock'?'個股':'ETF')+'\n'
-      +'持有成本：$'+s.cost+'\n'
-      +'現價：'+(p?'$'+p.price.toFixed(2):'載入中')+'\n'
-      +'今日漲跌：'+(p?(p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%':'—')+'\n'
-      +'持有損益：'+(pct>=0?'+':'')+pct.toFixed(1)+'%（'+(pnl>=0?'+':'')+'NT$'+Math.abs(pnl).toLocaleString()+'）\n'
-      +'加權指數：'+(_tD?_tD.price?.toLocaleString()+'點（'+(_tD.changePct>=0?'+':'')+_tD.changePct?.toFixed(2)+'%）':'—')+'\n'
-      +'費半：'+(_sD?(_sD.changePct>=0?'+':'')+_sD.changePct?.toFixed(2)+'%':'—')+'\n\n'
-      +'請依格式分析（每項2句以內）：\n【技術面】\n【基本面】\n【籌碼面】\n【外資動向】\n【風險評估】\n【操作建議】給明確建議（加倉/續抱/觀察/減碼/停損）';
-    callAI(prompt,
-      function(text){
-        var el=document.getElementById('diag-result');
-        if(!el)return;
-        el.innerHTML=text.split('\n').join('<br>').replace(/【([^】]+)】/g,'<br><strong style="color:#6b21a8;font-size:11px">【$1】</strong><br>');
-      },
-      function(){
-        var el=document.getElementById('diag-result');
-        if(el)el.innerHTML='<span style="color:var(--text3)">AI分析失敗，請稍後重試</span>';
+
+    function buildDiagPrompt(kl) {
+      var kStr = '';
+      if (kl && kl.ok) {
+        kStr = '\n【60日K線技術指標】\n'
+          +'近60日趨勢：'+(kl.trend60>=0?'+':'')+kl.trend60+'%\n'
+          +'60日最高：$'+kl.high60+' / 最低：$'+kl.low60+'\n'
+          +'MA5：$'+(kl.ma5||'—')+' / MA10：$'+(kl.ma10||'—')+' / MA20：$'+(kl.ma20||'—')+' / MA60：$'+(kl.ma60||'—')+'\n'
+          +'RSI(14)：'+kl.rsi+'\n'
+          +'成交量比（今日/均量）：'+kl.volRatio+'x\n'
+          +'現價距60日高點：'+((kl.latest-kl.high60)/kl.high60*100).toFixed(1)+'%\n'
+          +'現價距60日低點：+'+((kl.latest-kl.low60)/kl.low60*100).toFixed(1)+'%\n';
       }
-    );
+      return '你是台灣股市分析師，請用繁體中文分析以下持股，格式簡潔適合手機閱讀。\n'
+        +'股票：'+s.name+'（'+s.code+'）\n'
+        +'類型：'+(s.type==='stock'?'個股':'ETF')+'\n'
+        +'持有成本：$'+s.cost+'\n'
+        +'現價：'+(p?'$'+p.price.toFixed(2):'載入中')+'\n'
+        +'今日漲跌：'+(p?(p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%':'—')+'\n'
+        +'持有損益：'+(pct>=0?'+':'')+pct.toFixed(1)+'%（'+(pnl>=0?'+':'')+'NT$'+Math.abs(pnl).toLocaleString()+'）\n'
+        +'加權指數：'+(_tD?_tD.price?.toLocaleString()+'點（'+(_tD.changePct>=0?'+':'')+_tD.changePct?.toFixed(2)+'%）':'—')+'\n'
+        +'費半：'+(_sD?(_sD.changePct>=0?'+':'')+_sD.changePct?.toFixed(2)+'%':'—')+'\n'
+        + kStr
+        +'\n請依格式分析（每項2句以內）：\n【技術面+K線】請結合以上K線數據分析均線多空、趨勢強弱、支撐壓力\n【基本面】\n【籌碼面】\n【外資動向】\n【風險評估】\n【操作建議】根據K線給出具體建議（加倉/續抱/觀察/減碼/停損）及目標價或停損點';
+    }
+
+    function runDiag(kl) {
+      callAI(buildDiagPrompt(kl),
+        function(text){
+          var el=document.getElementById('diag-result');
+          if(!el)return;
+          el.innerHTML=text.split('\n').join('<br>').replace(/【([^】]+)】/g,'<br><strong style="color:#6b21a8;font-size:11px">【$1】</strong><br>');
+        },
+        function(){
+          var el=document.getElementById('diag-result');
+          if(el)el.innerHTML='<span style="color:var(--text3)">AI分析失敗，請稍後重試</span>';
+        }
+      );
+    }
+
+    // 先抓 K 線，再做分析
+    fetch('/api/kline?code='+s.code, {signal: AbortSignal.timeout(8000)})
+      .then(function(r){ return r.json(); })
+      .then(function(kl){ runDiag(kl); })
+      .catch(function(){ runDiag(null); });
   })();
 }
 
@@ -1150,21 +1174,44 @@ function openAIDetail(code) {
   showPage('p-detail');
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
 
-  // API 即時分析推薦股
+  // API 即時分析推薦股（含 K 線）
   setTimeout(function() {
     var _rp = gP(r.code);
-    var rPrompt = '你是台灣股市分析師，請用繁體中文分析以下推薦股票（3-4句）：\n'
-      +'股票：'+r.name+'（'+r.code+'）\n'
-      +'現價：'+(_rp?'$'+_rp.price.toFixed(2):'—')+'\n'
-      +'今日漲跌：'+(_rp?(_rp.changePct>=0?'+':'')+_rp.changePct.toFixed(2)+'%':'—')+'\n'
-      +'建議入場區：$'+r.entryLow+' ~ $'+r.entryHigh+'\n'
-      +'加權指數：'+(gP('TAIEX')?gP('TAIEX').price?.toLocaleString()+'點（'+(gP('TAIEX').changePct>=0?'+':'')+gP('TAIEX').changePct?.toFixed(2)+'%）':'—')+'\n\n'
-      +'請分析：目前技術面狀況、是否適合現在進場、具體操作建議（買進/觀望/等待）。';
-    var el=document.getElementById('rec-ai-result');
-    if(el) callAI(rPrompt,
-      function(t){el.innerHTML='<div style="font-size:13px;line-height:1.85">'+t.split('\n').join('<br>')+'</div>';},
-      function(){el.innerHTML='<span style="color:var(--text3)">分析載入失敗</span>';}
-    );
+    var recEl = document.getElementById('rec-ai-result');
+
+    function buildRecPrompt(kl) {
+      var kStr = '';
+      if (kl && kl.ok) {
+        kStr = '\n【60日K線指標】\n'
+          +'近60日趨勢：'+(kl.trend60>=0?'+':'')+kl.trend60+'%\n'
+          +'60日最高：$'+kl.high60+' / 最低：$'+kl.low60+'\n'
+          +'MA5：$'+(kl.ma5||'—')+' / MA20：$'+(kl.ma20||'—')+' / MA60：$'+(kl.ma60||'—')+'\n'
+          +'RSI(14)：'+kl.rsi+'  成交量比：'+kl.volRatio+'x\n';
+      }
+      return '你是台灣股市分析師，請用繁體中文分析以下推薦股票（直接給結論）：\n'
+        +'股票：'+r.name+'（'+r.code+'）\n'
+        +'現價：'+(_rp?'$'+_rp.price.toFixed(2):'—')+'\n'
+        +'今日漲跌：'+(_rp?(_rp.changePct>=0?'+':'')+_rp.changePct.toFixed(2)+'%':'—')+'\n'
+        +'建議入場區：$'+r.entryLow+' ~ $'+r.entryHigh+' / 停損：$'+r.stop+'\n'
+        +'加權指數：'+(gP('TAIEX')?gP('TAIEX').price?.toLocaleString()+'點（'+(gP('TAIEX').changePct>=0?'+':'')+gP('TAIEX').changePct?.toFixed(2)+'%）':'—')+'\n'
+        + kStr
+        +'\n請分析：①K線技術面（均線位置、趨勢、RSI） ②現在是否在建議入場區 ③具體操作建議（立即買進/等待拉回/觀望）及理由。';
+    }
+
+    fetch('/api/kline?code='+r.code, {signal: AbortSignal.timeout(8000)})
+      .then(function(res){ return res.json(); })
+      .then(function(kl){
+        if (recEl) callAI(buildRecPrompt(kl),
+          function(t){ recEl.innerHTML='<div style="font-size:13px;line-height:1.85">'+t.split('\n').join('<br>')+'</div>'; },
+          function(){ recEl.innerHTML='<span style="color:var(--text3)">分析載入失敗</span>'; }
+        );
+      })
+      .catch(function(){
+        if (recEl) callAI(buildRecPrompt(null),
+          function(t){ recEl.innerHTML='<div style="font-size:13px;line-height:1.85">'+t.split('\n').join('<br>')+'</div>'; },
+          function(){ recEl.innerHTML='<span style="color:var(--text3)">分析載入失敗</span>'; }
+        );
+      });
   }, 300);
 }
 
