@@ -30,10 +30,12 @@ export default async function handler(req, res) {
           const dateMatch  = m[1].match(/<pubDate>(.*?)<\/pubDate>/);
           const title = (titleMatch?.[1] || titleMatch?.[2] || '').trim();
           if (!title) return;
+          const linkMatch = m[1].match(/<link>(.*?)<\/link>|<link href="([^"]+)"/);
+          const url = (linkMatch?.[1] || linkMatch?.[2] || '').trim().replace(/^<!\[CDATA\[|\]\]>$/g,'');
           const d = dateMatch ? new Date(dateMatch[1]) : new Date();
           const diff = Math.round((Date.now() - d.getTime()) / 60000);
           const time = diff < 60 ? diff + '分鐘前' : Math.round(diff/60) + '小時前';
-          news.push({ src: s.src, tag: s.tag, title, time });
+          news.push({ src: s.src, tag: s.tag, title, time, url: url || null });
         });
       } catch(e) {}
     })
