@@ -849,12 +849,11 @@ function renderAI() {
               ${p ? (()=>{
                 const inZone = p.price >= r.entryLow && p.price <= r.entryHigh;
                 const below  = p.price < r.entryLow;
-                const above  = p.price > r.entryHigh;
                 const zoneStr = '$'+fmtN(r.entryLow)+' ~ $'+fmtN(r.entryHigh);
                 const status = inZone ? '<span style="color:#166534;font-weight:700">✅ 現已在建議入場區</span>' :
                                below  ? '<span style="color:#1d4ed8">📉 低於建議區，可積極布局</span>' :
                                         '<span style="color:#92670a">⏳ 高於建議區，等待回測</span>';
-                return '建議入場區：'+zoneStr+' · 停損 $'+fmtN(r.stop)+'<br>'+status;
+                return '現價 <strong>$'+fmtN(p.price)+'</strong> · 建議入場區：'+zoneStr+' · 停損 $'+fmtN(r.stop)+'<br>'+status;
               })() : '載入中'}
             </div>
             ${tagH(r.a)}
@@ -904,8 +903,8 @@ async function renderNews() {
     const news = d?.news || [];
     if (!news.length) throw new Error('empty');
     if (!nEl) return;
-    nEl.innerHTML = news.map(n=>`<div class="ni">
-      <div class="ni-s">${n.src||'市場新聞'} <span class="chip">${n.tag||'市場'}</span></div>
+    nEl.innerHTML = news.map(n=>`<div class="ni" ${n.url?'onclick="window.open(\''+n.url+'\',\'_blank\')" style="cursor:pointer"':''}>
+      <div class="ni-s">${n.src||'市場新聞'} <span class="chip">${n.tag||'市場'}</span>${n.url?'<span style="float:right;font-size:10px;color:var(--text3)">閱讀 ›</span>':''}</div>
       <div class="ni-t">${n.title||n.t||''}</div>
       <div class="ni-time">${n.time||n.tm||''}</div>
     </div>`).join('');
@@ -1011,68 +1010,31 @@ function openDetail(code) {
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
 
 
-  // 根據即時數據自動產生健診（免費，無需 API）
-  // 立即執行（不用 setTimeout，避免閉包問題）
-  (function() {
-    var el = document.getElementById('diag-result');
-    if (!el) return;
-    var _taiexNow = gP('TAIEX');
-    var _soxNow   = gP('^SOX');
-    var twPct  = _taiexNow ? _taiexNow.changePct : 0;
-    var soxPct = _soxNow   ? _soxNow.changePct   : 0;
-    var isETF  = s.type === 'etf';
-
-    var techSign = p && p.changePct >= 2  ? '強勢上漲，短線動能充足' :
-                   p && p.changePct >= 0.5 ? '小幅走強，趨勢偏多' :
-                   p && p.changePct <= -2  ? '明顯拉回，注意支撐' :
-                   p && p.changePct <= -0.5? '小幅走弱，量縮觀察' : '盤整整理，等待方向';
-    var techAdv = (p && p.changePct >= 0) ? '建議設好停利，避免追高' : '若跌破前低則考慮減碼';
-
-    var fundStr = isETF
-      ? s.name + ' 為分散投資型 ETF，持有多檔成分股，風險相對分散，殖利率穩定，適合長期持有。'
-      : s.name + ' 為台股個股，需持續追蹤季報與法說會，留意 EPS 是否符合預期。';
-
-    var chipStr = twPct >= 1 ? '今日大盤走強，外資與投信偏向買超，籌碼面偏多。' :
-                  twPct <= -1? '今日大盤走弱，籌碼面可能偏向賣壓，注意外資動向。' :
-                  '大盤盤整，籌碼面中性，觀察主力是否有明確方向。';
-
-    var foreignStr = soxPct >= 2  ? '費半今日大漲 +' + soxPct.toFixed(2) + '%，外資對半導體族群態度積極，有利台股科技股。' :
-                     soxPct <= -2 ? '費半今日重跌 ' + soxPct.toFixed(2) + '%，外資可能賣超科技股，需注意相關族群壓力。' :
-                     '費半今日 ' + (soxPct>=0?'+':'') + soxPct.toFixed(2) + '%，外資態度中性。';
-
-    var riskStr = pct <= -10 ? '目前持倉虧損 ' + Math.abs(pct).toFixed(1) + '%，需評估是否設停損，避免擴大損失。' :
-                  pct >= 30  ? '目前持倉獲利 ' + pct.toFixed(1) + '%，建議分批獲利了結，保留部分持股續抱。' :
-                  '持倉損益 ' + (pct>=0?'+':'') + pct.toFixed(1) + '%，風險尚在可控範圍，持續追蹤基本面。';
-
-    // 優先用損益判斷（和卡片標籤一致）
-    var action = pct >= 30  ? '▼ 獲利了結（+' + pct.toFixed(0) + '%）' :
-                 pct <= -10 ? '⚠ 評估停損（' + pct.toFixed(0) + '%）' :
-                 pct >= 15  ? '💰 續抱觀察獲利點（+' + pct.toFixed(0) + '%）' :
-                 (p && p.changePct >= 1)  ? '⏸ 續抱（今日偏強）' :
-                 (p && p.changePct <= -2) ? '👁 觀察（今日拉回）' : '⏸ 續抱';
-
-    var advStr = act.a === 'sell'  ? '持倉已大幅獲利（+' + pct.toFixed(1) + '%），建議分批出場（先賣 1/3），鎖定利潤，剩餘續抱等待更高目標。' :
-                 act.a === 'stop'  ? '虧損已逾 10%（' + pct.toFixed(1) + '%），建議重新評估持股邏輯，若基本面無改變可續抱，否則考慮停損出場。' :
-                 act.a === 'watch' ? '今日走弱，短線觀察是否有量縮止跌訊號，未見止跌前暫緩加碼，以成本價為停損參考。' :
-                 (p && p.changePct >= 0) ? '今日表現偏強，可續抱持有。若繼續上漲注意前高附近停利；若轉弱以成本價為守。' :
-                 '今日小幅拉回，屬正常整理，量縮回檔為正常修正，不需急於停損，持續觀察。';
-
-    var bgColor  = pct >= 0 ? '#ecfdf5' : '#fef2f2';
-    var txtColor = pct >= 0 ? '#166534' : '#991b1b';
-    var rows = [
-      ['技術面',  techSign + '。' + techAdv + '。'],
-      ['基本面',  fundStr],
-      ['籌碼面',  chipStr],
-      ['外資動向',foreignStr],
-      ['風險評估',riskStr],
-      ['操作建議',advStr],
-    ];
-    el.innerHTML = '<div style="margin-bottom:10px">'
-      + '<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700;background:' + bgColor + ';color:' + txtColor + '">' + action + '</span>'
-      + '</div><div style="display:grid;gap:8px">'
-      + rows.map(function(r){ return '<div style="padding:8px 0;border-bottom:1px solid var(--border)"><div style="font-size:10px;font-weight:700;color:#6b21a8;margin-bottom:3px">' + r[0] + '</div><div style="font-size:13px;line-height:1.7">' + r[1] + '</div></div>'; }).join('')
-      + '</div>';
-  }, 300);
+  // Gemini AI 即時健診
+  (function(){
+    var _tD=gP('TAIEX'), _sD=gP('^SOX');
+    var prompt='你是台灣股市分析師，請用繁體中文分析以下持股，格式簡潔適合手機閱讀。\n'
+      +'股票：'+s.name+'（'+s.code+'）\n'
+      +'類型：'+(s.type==='stock'?'個股':'ETF')+'\n'
+      +'持有成本：$'+s.cost+'\n'
+      +'現價：'+(p?'$'+p.price.toFixed(2):'載入中')+'\n'
+      +'今日漲跌：'+(p?(p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%':'—')+'\n'
+      +'持有損益：'+(pct>=0?'+':'')+pct.toFixed(1)+'%（'+(pnl>=0?'+':'')+'NT$'+Math.abs(pnl).toLocaleString()+'）\n'
+      +'加權指數：'+(_tD?_tD.price?.toLocaleString()+'點（'+(_tD.changePct>=0?'+':'')+_tD.changePct?.toFixed(2)+'%）':'—')+'\n'
+      +'費半：'+(_sD?(_sD.changePct>=0?'+':'')+_sD.changePct?.toFixed(2)+'%':'—')+'\n\n'
+      +'請依格式分析（每項2句以內）：\n【技術面】\n【基本面】\n【籌碼面】\n【外資動向】\n【風險評估】\n【操作建議】給明確建議（加倉/續抱/觀察/減碼/停損）';
+    callAI(prompt,
+      function(text){
+        var el=document.getElementById('diag-result');
+        if(!el)return;
+        el.innerHTML=text.split('\n').join('<br>').replace(/【([^】]+)】/g,'<br><strong style="color:#6b21a8;font-size:11px">【$1】</strong><br>');
+      },
+      function(){
+        var el=document.getElementById('diag-result');
+        if(el)el.innerHTML='<span style="color:var(--text3)">AI分析失敗，請稍後重試</span>';
+      }
+    );
+  })();
 }
 
 
