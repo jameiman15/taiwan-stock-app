@@ -760,6 +760,53 @@ function renderAI() {
       <p style="font-size:13px;line-height:1.85;color:var(--text)">${buildAnalysis()}</p>
     </div>
 
+    <!-- AI 族群結論（即時） -->
+    <div class="st">📊 AI 族群趨勢結論</div>
+    <div class="card" id="sector-card">
+      <div style="padding:16px;text-align:center;color:var(--text3);font-size:13px">⏳ AI 分析族群趨勢中...</div>
+    </div>`;
+
+  // 呼叫 Claude 分析族群趨勢
+  const _taiex = gP('TAIEX'), _sox = gP('^SOX'), _sp500 = gP('^GSPC'), _tsmc = gP('2330');
+  fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 800,
+      messages: [{ role: 'user', content: `你是台灣股市分析師。今日市場數據：
+加權指數：${_taiex ? _taiex.price?.toLocaleString()+'點（'+(_taiex.changePct>=0?'+':'')+_taiex.changePct?.toFixed(2)+'%）' : '—'}
+台積電：${_tsmc ? '$'+_tsmc.price?.toFixed(0)+'（'+(_tsmc.changePct>=0?'+':'')+_tsmc.changePct?.toFixed(2)+'%）' : '—'}
+費半：${_sox ? (_sox.changePct>=0?'+':'')+_sox.changePct?.toFixed(2)+'%' : '—'}
+S&P500：${_sp500 ? (_sp500.changePct>=0?'+':'')+_sp500.changePct?.toFixed(2)+'%' : '—'}
+
+請用繁體中文給出台股族群趨勢結論，格式如下（每項1-2句，直接給結論不要廢話）：
+
+🚀 多頭族群（現在可以布局）：說明哪些族群/個股有多頭趨勢，為什麼
+👁 觀察族群（等待訊號）：哪些族群需要觀察，等什麼條件
+⚠️ 迴避族群（暫時不碰）：哪些族群目前不適合進場，理由
+💡 本週操作重點：給一個最重要的操作策略` }]
+    })
+  })
+  .then(r => r.json())
+  .then(d => {
+    const text = d?.content?.[0]?.text || '';
+    const el = document.getElementById('sector-card');
+    if (el && text) {
+      el.innerHTML = `<div style="font-size:13px;line-height:1.9;color:var(--text)">
+        ${text.replace(/
+/g,'<br>').replace(/(🚀|👁|⚠️|💡)[^
+<]*/g, m => `<div style="margin:6px 0">${m}</div>`)}
+      </div>`;
+    }
+  })
+  .catch(() => {
+    const el = document.getElementById('sector-card');
+    if (el) el.innerHTML = '<div style="padding:8px;color:var(--text3);font-size:13px">族群分析載入失敗</div>';
+  });
+
+
+  document.getElementById('p-ai').innerHTML += `
     <div class="st">AI 推薦買進</div>
     ${AI_RECS.map(r=>{
       const p = gP(r.code);
@@ -794,16 +841,61 @@ function renderAI() {
     <div style="height:20px"></div>`;
 }
 
-function renderNews() {
+async function renderNews() {
   document.getElementById('p-news').innerHTML = `
     <div class="st">台灣 &amp; 美國市場新聞</div>
-    <div class="card">
-      ${NEWS.map(n=>`<div class="ni">
+    <div class="card" id="news-card">
+      <div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">⏳ 載入新聞中...</div>
+    </div><div style="height:20px"></div>`;
+
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1200,
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+        messages: [{ role: 'user', content: `請搜尋今天（${new Date().toLocaleDateString('zh-TW')}）最新的台灣股市和美股市場新聞，整理出8-10則重要新聞，用以下 JSON 格式回覆（只回 JSON，不要其他文字）：
+[
+  {"src":"來源名稱","tag":"台股/美股/ETF/外資/總體","title":"新聞標題（繁體中文）","time":"幾小時前或時間"},
+  ...
+]
+來源可以是鉅亨網、工商時報、經濟日報、MoneyDJ、Reuters、Bloomberg等，tag只能是台股/美股/ETF/外資/總體其中之一。` }]
+      })
+    });
+    const d = await r.json();
+    const text = d?.content?.find(c=>c.type==='text')?.text || '[]';
+    let news = [];
+    try {
+      const clean = text.replace(/```json|```/g,'').trim();
+      news = JSON.parse(clean);
+    } catch(e) {}
+
+    const el = document.getElementById('news-card');
+    if (!el) return;
+    if (!news.length) {
+      // fallback 顯示靜態新聞
+      el.innerHTML = NEWS.map(n=>`<div class="ni">
         <div class="ni-s">${n.src} <span class="chip">${n.tag}</span></div>
         <div class="ni-t">${n.t}</div>
         <div class="ni-time">${n.tm}</div>
-      </div>`).join('')}
-    </div><div style="height:20px"></div>`;
+      </div>`).join('');
+      return;
+    }
+    el.innerHTML = news.map(n=>`<div class="ni">
+      <div class="ni-s">${n.src||'市場新聞'} <span class="chip">${n.tag||'市場'}</span></div>
+      <div class="ni-t">${n.title||n.t||''}</div>
+      <div class="ni-time">${n.time||n.tm||''}</div>
+    </div>`).join('');
+  } catch(e) {
+    const el = document.getElementById('news-card');
+    if (el) el.innerHTML = NEWS.map(n=>`<div class="ni">
+      <div class="ni-s">${n.src} <span class="chip">${n.tag}</span></div>
+      <div class="ni-t">${n.t}</div>
+      <div class="ni-time">${n.tm}</div>
+    </div>`).join('');
+  }
 }
 
 function renderAlert() {
@@ -861,11 +953,11 @@ function openDetail(code) {
   const all = Object.values(PF).flatMap(a=>a.stocks||[]);
   const s = all.find(x=>x.code===code); if(!s) return;
   const p = gP(code);
-  const d = DIAG[code]||{a:'hold',l:'續抱',r:'暫無診斷'};
   const price = p?.price ?? s.cost;
   const pct = ((price-s.cost)/s.cost*100);
   const pnl = Math.round((price-s.cost)*s.qty);
   const accName = ACCOUNTS.find(a=>a.id===s.account)?.name||'—';
+  const taiex = gP('TAIEX'), sox = gP('^SOX');
 
   document.getElementById('p-detail').innerHTML = `
     <div class="det-hd" onclick="go(S.prevPage)"><i class="ti ti-arrow-left"></i><span>${s.name} 詳情</span></div>
@@ -878,13 +970,18 @@ function openDetail(code) {
         <div style="text-align:right">
           <div style="font-size:11px;color:var(--text3)">持有損益</div>
           <div style="font-size:20px;font-weight:700;font-family:'Space Mono',monospace" class="${pct>=0?'up':'dn'}">${pct>=0?'+':''}${pct.toFixed(1)}%</div>
+          <div style="font-size:11px;color:var(--text3)">${pnl>=0?'+':''}NT$${Math.abs(pnl).toLocaleString()}</div>
         </div>
       </div>
-      <div class="card ${d.a==='sell'?'acc-up':d.a==='add'||d.a==='buy'?'acc-dn':'acc-bl'}">
-        <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">⚕️ AI 健診結果</div>
-        ${tagH(d.a)}
-        <div style="font-size:13px;color:var(--text);margin-top:10px;line-height:1.75">${d.r}</div>
+
+      <!-- AI 健診 -->
+      <div class="card" id="diag-card" style="border-left:3px solid #6b21a8">
+        <div style="font-size:10px;font-weight:700;color:#6b21a8;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">⚕️ AI 即時健診</div>
+        <div id="diag-result" style="font-size:13px;line-height:1.85;color:var(--text)">
+          <div style="text-align:center;padding:16px;color:var(--text3)">⏳ AI 分析中...</div>
+        </div>
       </div>
+
       <div class="st">持倉資訊</div>
       <div class="card"><table style="width:100%;font-size:13px;border-collapse:collapse">
         ${[['帳戶',accName],['類型',s.type==='stock'?'個股':s.type==='etf'?'ETF':'基金'],['持有股數',s.qty.toLocaleString()+' 股'],['平均成本','$'+s.cost],['現值','NT$'+Math.round(price*s.qty).toLocaleString()],['未實現損益',(pnl>=0?'+':'')+'NT$'+Math.abs(pnl).toLocaleString()]].map(([k,v])=>`<tr style="border-bottom:1px solid var(--border)"><td style="padding:9px 0;color:var(--text3);width:45%">${k}</td><td style="padding:9px 0;font-weight:500;text-align:right">${v}</td></tr>`).join('')}
@@ -892,6 +989,56 @@ function openDetail(code) {
     </div>`;
   showPage('p-detail');
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
+
+  // 呼叫 Claude AI 健診
+  const prompt = `你是台灣股市專業分析師，請用繁體中文對以下持股進行多面向健診分析。
+
+【持股資訊】
+股票：${s.name}（${s.code}）
+類型：${s.type==='stock'?'個股':'ETF'}
+持有成本：$${s.cost} / 股
+現價：${p?'$'+p.price.toFixed(2):'資料載入中'}
+漲跌：${p?(p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%':'—'}
+持有損益：${pct>=0?'+':''}${pct.toFixed(1)}%（${pnl>=0?'+':''}NT$${Math.abs(pnl).toLocaleString()}）
+大盤：${taiex?`加權指數 ${taiex.price?.toLocaleString()} 點（${taiex.changePct>=0?'+':''}${taiex.changePct?.toFixed(2)}%）`:'—'}
+費半：${sox?`${sox.price?.toFixed(0)}（${sox.changePct>=0?'+':''}${sox.changePct?.toFixed(2)}%）`:'—'}
+
+請依照以下格式分析：
+
+【技術面】（均線、趨勢、RSI、MACD 等面向評估，2句）
+【基本面】（EPS、本益比、營收、獲利能力，2句）
+【籌碼面】（外資、投信、主力動向，1-2句）
+【外資動向】（外資近期是買超還是賣超，趨勢如何，1句）
+【風險評估】（主要下行風險，1-2句）
+【操作建議】用一段話給出明確建議：加倉/續抱/觀察/減碼/停損，並說明理由和目標價或停損點。
+
+格式要簡潔清晰，適合手機閱讀。`;
+
+  fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  })
+  .then(r => r.json())
+  .then(d => {
+    const text = d?.content?.[0]?.text || '分析失敗，請稍後再試';
+    const el = document.getElementById('diag-result');
+    if (el) {
+      el.innerHTML = text
+        .replace(/
+/g,'<br>')
+        .replace(/【([^】]+)】/g,'<br><strong style="color:#6b21a8;font-size:12px">【$1】</strong><br>')
+        .replace(/^<br>/,'');
+    }
+  })
+  .catch(() => {
+    const el = document.getElementById('diag-result');
+    if (el) el.innerHTML = '<span style="color:var(--text3)">分析失敗，請稍後再試</span>';
+  });
 }
 
 function openAIDetail(code) {
@@ -925,42 +1072,113 @@ function openAIDetail(code) {
 // ─── MODAL ──────────────────────────────────────────────────
 // 常見個股 + ETF 清單
 const STOCK_DB = [
-  // 熱門個股
-  {code:'2330',name:'台積電',    type:'stock'},
-  {code:'2317',name:'鴻海',      type:'stock'},
-  {code:'2454',name:'聯發科',    type:'stock'},
-  {code:'2412',name:'中華電信',  type:'stock'},
-  {code:'2882',name:'國泰金',    type:'stock'},
-  {code:'2884',name:'玉山金',    type:'stock'},
-  {code:'2886',name:'兆豐金',    type:'stock'},
-  {code:'2891',name:'中信金',    type:'stock'},
-  {code:'2303',name:'聯電',      type:'stock'},
-  {code:'2379',name:'瑞昱',      type:'stock'},
-  {code:'3008',name:'大立光',    type:'stock'},
-  {code:'2308',name:'台達電',    type:'stock'},
-  {code:'2357',name:'華碩',      type:'stock'},
-  {code:'2382',name:'廣達',      type:'stock'},
-  {code:'3045',name:'台灣大',    type:'stock'},
-  {code:'4904',name:'遠傳',      type:'stock'},
-  {code:'6505',name:'台塑化',    type:'stock'},
-  {code:'1301',name:'台塑',      type:'stock'},
-  {code:'1303',name:'南亞',      type:'stock'},
-  {code:'2002',name:'中鋼',      type:'stock'},
+  // 半導體
+  {code:'2330',name:'台積電',type:'stock'},
+  {code:'2303',name:'聯電',type:'stock'},
+  {code:'2379',name:'瑞昱',type:'stock'},
+  {code:'2454',name:'聯發科',type:'stock'},
+  {code:'2408',name:'南亞科',type:'stock'},
+  {code:'3711',name:'日月光投控',type:'stock'},
+  {code:'2337',name:'旺宏',type:'stock'},
+  {code:'3034',name:'聯詠',type:'stock'},
+  {code:'3443',name:'創意',type:'stock'},
+  {code:'6770',name:'力積電',type:'stock'},
+  {code:'2344',name:'華邦電',type:'stock'},
+  {code:'5347',name:'世界',type:'stock'},
+  // 科技/電子
+  {code:'2317',name:'鴻海',type:'stock'},
+  {code:'2308',name:'台達電',type:'stock'},
+  {code:'2357',name:'華碩',type:'stock'},
+  {code:'2382',name:'廣達',type:'stock'},
+  {code:'2376',name:'技嘉',type:'stock'},
+  {code:'3008',name:'大立光',type:'stock'},
+  {code:'2395',name:'研華',type:'stock'},
+  {code:'6669',name:'緯穎',type:'stock'},
+  {code:'2353',name:'宏碁',type:'stock'},
+  {code:'3231',name:'緯創',type:'stock'},
+  {code:'2324',name:'仁寶',type:'stock'},
+  {code:'2356',name:'英業達',type:'stock'},
+  {code:'2385',name:'群光',type:'stock'},
+  {code:'3661',name:'世芯-KY',type:'stock'},
+  {code:'2327',name:'國巨',type:'stock'},
+  // 通訊
+  {code:'2412',name:'中華電信',type:'stock'},
+  {code:'3045',name:'台灣大',type:'stock'},
+  {code:'4904',name:'遠傳',type:'stock'},
+  // 金融
+  {code:'2882',name:'國泰金',type:'stock'},
+  {code:'2884',name:'玉山金',type:'stock'},
+  {code:'2886',name:'兆豐金',type:'stock'},
+  {code:'2891',name:'中信金',type:'stock'},
+  {code:'2881',name:'富邦金',type:'stock'},
+  {code:'2883',name:'開發金',type:'stock'},
+  {code:'2885',name:'元大金',type:'stock'},
+  {code:'2887',name:'台新金',type:'stock'},
+  {code:'2888',name:'新光金',type:'stock'},
+  {code:'2889',name:'國票金',type:'stock'},
+  {code:'2890',name:'永豐金',type:'stock'},
+  {code:'2892',name:'第一金',type:'stock'},
+  {code:'5880',name:'合庫金',type:'stock'},
+  {code:'2801',name:'彰銀',type:'stock'},
+  // 傳產/石化
+  {code:'6505',name:'台塑化',type:'stock'},
+  {code:'1301',name:'台塑',type:'stock'},
+  {code:'1303',name:'南亞',type:'stock'},
+  {code:'1326',name:'台化',type:'stock'},
+  {code:'2002',name:'中鋼',type:'stock'},
+  {code:'1402',name:'遠東新',type:'stock'},
+  {code:'1216',name:'統一',type:'stock'},
+  {code:'1101',name:'台泥',type:'stock'},
+  {code:'1102',name:'亞泥',type:'stock'},
+  // 生技醫療
+  {code:'4711',name:'中裕',type:'stock'},
+  {code:'4968',name:'立積',type:'stock'},
+  {code:'6446',name:'藥華藥',type:'stock'},
+  {code:'4126',name:'太醫',type:'stock'},
+  // AI伺服器/散熱/機殼
+  {code:'3017',name:'奇鋐',type:'stock'},
+  {code:'6230',name:'超眾',type:'stock'},
+  {code:'2377',name:'微星',type:'stock'},
+  {code:'3703',name:'欣興',type:'stock'},
+  {code:'8299',name:'群聯',type:'stock'},
+  {code:'6515',name:'穎崴',type:'stock'},
+  {code:'5483',name:'中美晶',type:'stock'},
+  {code:'3035',name:'智原',type:'stock'},
+  // AI先進封裝/CoWoS
+  {code:'5274',name:'信驊',type:'stock'},
+  {code:'4966',name:'譜瑞-KY',type:'stock'},
+  {code:'3529',name:'力旺',type:'stock'},
+  {code:'6533',name:'晶心科',type:'stock'},
+  {code:'3131',name:'弘塑',type:'stock'},
+  // AI網通/高速傳輸
+  {code:'2419',name:'仲琦',type:'stock'},
+  {code:'4977',name:'眾達-KY',type:'stock'},
+  {code:'3026',name:'禾伸堂',type:'stock'},
+  {code:'2492',name:'華新科',type:'stock'},
+  {code:'6488',name:'環球晶',type:'stock'},
+  // AI概念/應用/軟體
+  {code:'6214',name:'精誠',type:'stock'},
+  {code:'3085',name:'碩天',type:'stock'},
+  {code:'6409',name:'旭隼',type:'stock'},
+  {code:'6176',name:'瑞儀',type:'stock'},
+  // AI電源/功率半導體
+  {code:'6415',name:'矽力-KY',type:'stock'},
+  {code:'2049',name:'上銀',type:'stock'},
+  {code:'1536',name:'和大',type:'stock'},
+  {code:'6274',name:'台燿',type:'stock'},
   // 熱門 ETF
-  {code:'0050', name:'元大台灣50',          type:'etf'},
-  {code:'0056', name:'元大高股息',          type:'etf'},
-  {code:'00878',name:'國泰永續高股息',      type:'etf'},
-  {code:'00919',name:'群益台灣精選高息',    type:'etf'},
-  {code:'00929',name:'復華台灣科技優息',    type:'etf'},
-  {code:'006208',name:'富邦台50',           type:'etf'},
-  {code:'00881',name:'國泰台灣5G+',         type:'etf'},
-  {code:'00896',name:'中信綠能及電動車',    type:'etf'},
-  {code:'00940',name:'元大台灣價值高息',    type:'etf'},
-  {code:'00943',name:'國泰半導體',          type:'etf'},
-  {code:'009816',name:'凱基台灣TOP50',      type:'etf'},
-  {code:'00900',name:'富邦特選高股息30',    type:'etf'},
-  {code:'00922',name:'國泰台灣領袖50',      type:'etf'},
-  {code:'00892',name:'富邦台灣半導體',      type:'etf'},
+  {code:'00878',name:'國泰永續高股息',type:'etf'},
+  {code:'00919',name:'群益台灣精選高息',type:'etf'},
+  {code:'00929',name:'復華台灣科技優息',type:'etf'},
+  {code:'006208',name:'富邦台50',type:'etf'},
+  {code:'00881',name:'國泰台灣5G+',type:'etf'},
+  {code:'00896',name:'中信綠能及電動車',type:'etf'},
+  {code:'00940',name:'元大台灣價值高息',type:'etf'},
+  {code:'00943',name:'國泰半導體',type:'etf'},
+  {code:'009816',name:'凱基台灣TOP50',type:'etf'},
+  {code:'00900',name:'富邦特選高股息30',type:'etf'},
+  {code:'00922',name:'國泰台灣領袖50',type:'etf'},
+  {code:'00892',name:'富邦台灣半導體',type:'etf'},
 ];
 
 function openAddModal() {
