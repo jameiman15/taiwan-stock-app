@@ -1,29 +1,4 @@
-<!DO
-
-  // API 即時更新明日開盤建議
-  setTimeout(function() {
-    if (!sp500 && !taiex) return;
-    const opPrompt = '你是台股分析師，根據以下數據給出明日台股開盤建議（繁體中文，直接給結論，2-3句）：\n'
-      + 'S&P500：'+(sp500?(sp500.changePct>=0?'+':'')+sp500.changePct.toFixed(2)+'%':'—')+'\n'
-      + '那斯達克：'+(nasdaq?(nasdaq.changePct>=0?'+':'')+nasdaq.changePct.toFixed(2)+'%':'—')+'\n'
-      + '費半：'+(sox?(sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%':'—')+'\n'
-      + '台積電ADR：'+(tsm?(tsm.changePct>=0?'+':'')+tsm.changePct.toFixed(2)+'%':'—')+'\n'
-      + '加權指數：'+(taiex?(taiex.changePct>=0?'+':'')+taiex.changePct.toFixed(2)+'%':'—')+'\n\n'
-      + '格式：第一句整體趨勢判斷，第二句哪些族群可布局，第三句風險提示。';
-    callAI(opPrompt, function(text) {
-      var vEl = document.getElementById('op-v');
-      var rEl = document.getElementById('op-r');
-      if (!vEl || !rEl) return;
-      var lines = text.trim().split('\n').filter(Boolean);
-      if (lines.length >= 2) {
-        vEl.textContent = lines[0];
-        rEl.textContent = lines.slice(1).join(' ');
-      } else {
-        vEl.textContent = text.length > 30 ? text.slice(0,30)+'...' : text;
-        rEl.textContent = text;
-      }
-    });
-  }, 500);CTYPE html>
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
@@ -663,6 +638,30 @@ function renderHome() {
       </div>`;
     })()}
   `;
+
+  // API 即時更新明日開盤建議
+  setTimeout(function() {
+    if (!sp500 && !taiex) return;
+    const opPrompt = '你是台股分析師，根據以下數據給出明日台股開盤建議（繁體中文，直接給結論，2-3句）：\n'
+      + 'S&P500：'+(sp500?(sp500.changePct>=0?'+':'')+sp500.changePct.toFixed(2)+'%':'—')+'\n'
+      + '那斯達克：'+(nasdaq?(nasdaq.changePct>=0?'+':'')+nasdaq.changePct.toFixed(2)+'%':'—')+'\n'
+      + '費半：'+(sox?(sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%':'—')+'\n'
+      + '台積電ADR：'+(tsm?(tsm.changePct>=0?'+':'')+tsm.changePct.toFixed(2)+'%':'—')+'\n'
+      + '加權指數：'+(taiex?(taiex.changePct>=0?'+':'')+taiex.changePct.toFixed(2)+'%':'—')+'\n\n'
+      + '格式：第一句整體趨勢判斷，第二句哪些族群可布局，第三句風險提示。';
+    callAI(opPrompt, function(text) {
+      var vEl = document.getElementById('op-v');
+      var rEl = document.getElementById('op-r');
+      if (!vEl || !rEl) return;
+      var lines = text.trim().split('\n').filter(Boolean);
+      if (lines.length >= 2) {
+        vEl.textContent = lines[0];
+        rEl.textContent = lines.slice(1).join(' ');
+      } else {
+        rEl.textContent = text;
+      }
+    });
+  }, 500);
 }
 
 function renderPortfolio() {
