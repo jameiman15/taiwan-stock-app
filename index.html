@@ -807,24 +807,18 @@ function renderAI() {
       ? `大盤偏弱，建議降低持股比重，保留現金等待止跌訊號，不宜逆勢加碼。`
       : `大盤盤整，以個股為主，選有外資持續買超且本益比合理的個股，等待量能回升。`;
 
-    el.innerHTML = `<div style="font-size:13px;line-height:1.95;color:var(--text);display:grid;gap:12px">
-      <div>
-        <div style="font-weight:700;margin-bottom:4px">🚀 多頭族群（可布局）</div>
-        <div style="color:var(--text2)">\${bullGroups.map(g=>'・'+g).join('<br>')}</div>
-      </div>
-      <div>
-        <div style="font-weight:700;margin-bottom:4px">👁 觀察族群（等訊號）</div>
-        <div style="color:var(--text2)">\${watchGroups.map(g=>'・'+g).join('<br>')}</div>
-      </div>
-      <div>
-        <div style="font-weight:700;margin-bottom:4px">⚠️ 迴避族群（暫不碰）</div>
-        <div style="color:var(--text2)">\${avoidGroups.map(g=>'・'+g).join('<br>')}</div>
-      </div>
-      <div style="background:var(--surface2);border-radius:10px;padding:10px">
-        <div style="font-weight:700;margin-bottom:4px">💡 本週操作重點</div>
-        <div>\${weekFocus}</div>
-      </div>
-    </div>`;
+    // Build HTML without template literal to avoid escaping issues
+    el.innerHTML = '<div style="font-size:13px;line-height:1.95;color:var(--text);display:grid;gap:12px">'
+      + '<div><div style="font-weight:700;margin-bottom:4px">🚀 多頭族群（可布局）</div>'
+      + '<div style="color:var(--text2)">' + bullGroups.map(g=>'・'+g).join('<br>') + '</div></div>'
+      + '<div><div style="font-weight:700;margin-bottom:4px">👁 觀察族群（等訊號）</div>'
+      + '<div style="color:var(--text2)">' + watchGroups.map(g=>'・'+g).join('<br>') + '</div></div>'
+      + '<div><div style="font-weight:700;margin-bottom:4px">⚠️ 迴避族群（暫不碰）</div>'
+      + '<div style="color:var(--text2)">' + avoidGroups.map(g=>'・'+g).join('<br>') + '</div></div>'
+      + '<div style="background:var(--surface2);border-radius:10px;padding:10px">'
+      + '<div style="font-weight:700;margin-bottom:4px">💡 本週操作重點</div>'
+      + '<div>' + weekFocus + '</div></div>'
+      + '</div>';
   }, 800);
 
 
@@ -1011,55 +1005,63 @@ function openDetail(code) {
   showPage('p-detail');
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
 
-  // 呼叫 Claude AI 健診
-  const prompt = `你是台灣股市專業分析師，請用繁體中文對以下持股進行多面向健診分析。
 
-【持股資訊】
-股票：${s.name}（${s.code}）
-類型：${s.type==='stock'?'個股':'ETF'}
-持有成本：$${s.cost} / 股
-現價：${p?'$'+p.price.toFixed(2):'資料載入中'}
-漲跌：${p?(p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%':'—'}
-持有損益：${pct>=0?'+':''}${pct.toFixed(1)}%（${pnl>=0?'+':''}NT$${Math.abs(pnl).toLocaleString()}）
-大盤：${taiex?`加權指數 ${taiex.price?.toLocaleString()} 點（${taiex.changePct>=0?'+':''}${taiex.changePct?.toFixed(2)}%）`:'—'}
-費半：${sox?`${sox.price?.toFixed(0)}（${sox.changePct>=0?'+':''}${sox.changePct?.toFixed(2)}%）`:'—'}
+  // 根據即時數據自動產生健診（免費，無需 API）
+  setTimeout(function() {
+    var el = document.getElementById('diag-result');
+    if (!el) return;
+    var twPct  = taiex ? taiex.changePct : 0;
+    var soxPct = sox   ? sox.changePct   : 0;
+    var isETF  = s.type === 'etf';
 
-請依照以下格式分析：
+    var techSign = p && p.changePct >= 2  ? '強勢上漲，短線動能充足' :
+                   p && p.changePct >= 0.5 ? '小幅走強，趨勢偏多' :
+                   p && p.changePct <= -2  ? '明顯拉回，注意支撐' :
+                   p && p.changePct <= -0.5? '小幅走弱，量縮觀察' : '盤整整理，等待方向';
+    var techAdv = (p && p.changePct >= 0) ? '建議設好停利，避免追高' : '若跌破前低則考慮減碼';
 
-【技術面】（均線、趨勢、RSI、MACD 等面向評估，2句）
-【基本面】（EPS、本益比、營收、獲利能力，2句）
-【籌碼面】（外資、投信、主力動向，1-2句）
-【外資動向】（外資近期是買超還是賣超，趨勢如何，1句）
-【風險評估】（主要下行風險，1-2句）
-【操作建議】用一段話給出明確建議：加倉/續抱/觀察/減碼/停損，並說明理由和目標價或停損點。
+    var fundStr = isETF
+      ? s.name + ' 為分散投資型 ETF，持有多檔成分股，風險相對分散，殖利率穩定，適合長期持有。'
+      : s.name + ' 為台股個股，需持續追蹤季報與法說會，留意 EPS 是否符合預期。';
 
-格式要簡潔清晰，適合手機閱讀。`;
+    var chipStr = twPct >= 1 ? '今日大盤走強，外資與投信偏向買超，籌碼面偏多。' :
+                  twPct <= -1? '今日大盤走弱，籌碼面可能偏向賣壓，注意外資動向。' :
+                  '大盤盤整，籌碼面中性，觀察主力是否有明確方向。';
 
-  fetch('/api/claude', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      messages: [{ role: 'user', content: prompt }]
-    })
-  })
-  .then(r => r.json())
-  .then(d => {
-    const text = d?.content?.[0]?.text || '分析失敗，請稍後再試';
-    const el = document.getElementById('diag-result');
-    if (el) {
-      el.innerHTML = text
-        .split('\n').join('<br>')
-        .replace(/【([^】]+)】/g,'<br><strong style="color:#6b21a8;font-size:12px">【$1】</strong><br>')
-        .replace(/^<br>/,'');
-    }
-  })
-  .catch(() => {
-    const el = document.getElementById('diag-result');
-    if (el) el.innerHTML = '<span style="color:var(--text3)">分析失敗，請稍後再試</span>';
-  });
+    var foreignStr = soxPct >= 2  ? '費半今日大漲 +' + soxPct.toFixed(2) + '%，外資對半導體族群態度積極，有利台股科技股。' :
+                     soxPct <= -2 ? '費半今日重跌 ' + soxPct.toFixed(2) + '%，外資可能賣超科技股，需注意相關族群壓力。' :
+                     '費半今日 ' + (soxPct>=0?'+':'') + soxPct.toFixed(2) + '%，外資態度中性。';
+
+    var riskStr = pct <= -10 ? '目前持倉虧損 ' + Math.abs(pct).toFixed(1) + '%，需評估是否設停損，避免擴大損失。' :
+                  pct >= 30  ? '目前持倉獲利 ' + pct.toFixed(1) + '%，建議分批獲利了結，保留部分持股續抱。' :
+                  '持倉損益 ' + (pct>=0?'+':'') + pct.toFixed(1) + '%，風險尚在可控範圍，持續追蹤基本面。';
+
+    var action = pct >= 30 ? '▼ 獲利了結' : pct <= -10 ? '⚠ 評估停損' :
+                 (p && p.changePct >= 1) ? '⏸ 續抱' : (p && p.changePct <= -2) ? '👁 觀察' : '⏸ 續抱';
+
+    var advStr = pct >= 30  ? '持倉已大幅獲利，建議分批出場（賣 1/3），鎖定利潤，剩餘續抱等待更高目標。' :
+                 pct <= -10 ? '虧損逾 10%，建議重新評估持股邏輯，若基本面無改變可續抱，否則考慮停損。' :
+                 (p && p.changePct >= 0) ? '今日表現偏強，可續抱持有。若繼續上漲注意前高停利；若轉弱以成本價為守。' :
+                 '今日小幅拉回，屬正常整理，量縮回檔為正常修正，不需急於停損。';
+
+    var bgColor  = pct >= 0 ? '#ecfdf5' : '#fef2f2';
+    var txtColor = pct >= 0 ? '#166534' : '#991b1b';
+    var rows = [
+      ['技術面',  techSign + '。' + techAdv + '。'],
+      ['基本面',  fundStr],
+      ['籌碼面',  chipStr],
+      ['外資動向',foreignStr],
+      ['風險評估',riskStr],
+      ['操作建議',advStr],
+    ];
+    el.innerHTML = '<div style="margin-bottom:10px">'
+      + '<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700;background:' + bgColor + ';color:' + txtColor + '">' + action + '</span>'
+      + '</div><div style="display:grid;gap:8px">'
+      + rows.map(function(r){ return '<div style="padding:8px 0;border-bottom:1px solid var(--border)"><div style="font-size:10px;font-weight:700;color:#6b21a8;margin-bottom:3px">' + r[0] + '</div><div style="font-size:13px;line-height:1.7">' + r[1] + '</div></div>'; }).join('')
+      + '</div>';
+  }, 300);
 }
+
 
 function openAIDetail(code) {
   S.prevPage = S.page;
@@ -1535,43 +1537,44 @@ function openFundAI(code, acct) {
     sox   ? `費城半導體 ${sox.price?.toFixed(0)}（${sox.changePct>=0?'+':''}${sox.changePct}%）` : '',
   ].filter(Boolean).join('、');
 
-  fetch('/api/claude', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      messages: [{
-        role: 'user',
-        content: `你是一位專業的台灣基金投資顧問，請用繁體中文分析以下基金的投資狀況並給出建議。
+  // 根據持倉數據自動產生基金分析
+  setTimeout(function() {
+    var resultEl = document.getElementById('fund-ai-result');
+    if (!resultEl) return;
+    var roiNum = parseFloat(roi);
+    var _t = gP('TAIEX'), _s = gP('^GSPC');
+    var twPct2 = _t ? _t.changePct : 0, sp5Pct2 = _s ? _s.changePct : 0;
 
-基金名稱：${fund.name}
-投入成本：NT$${fund.cost.toLocaleString()}
-目前市值：NT$${Math.round(mv).toLocaleString()}
-未實現損益：${roi >= 0 ? '+' : ''}${roi}%
-目前市場：${marketCtx || '資料載入中'}
+    var status = roiNum >= 20 ? '持倉大幅獲利，表現優異' :
+                 roiNum >= 5  ? '持倉小幅獲利，穩健成長' :
+                 roiNum >= -5 ? '持倉接近成本，盤整中'   :
+                 roiNum >= -15? '持倉出現虧損，需要關注' : '持倉虧損較大，建議重新評估';
 
-請分析：
-1. 【目前狀況】這檔基金的近期表現與市場環境評估（2-3句）
-2. 【操作建議】加倉 / 續抱 / 減碼 / 觀察，並說明理由（2-3句）
-3. 【風險提示】需要注意的風險（1-2句）
+    var advice = roiNum >= 30  ? '建議分批獲利了結（賣出 1/3），保留部分繼續持有，鎖定利潤。' :
+                 roiNum >= 10  ? '持倉表現良好，建議續抱。市場持續向好可小幅加碼。' :
+                 roiNum >= -10 ? '持倉在合理範圍，建議定期定額持續扣款，攤低成本。' :
+                 '持倉虧損偏大，先暫停加碼，待市場訊號明確後再決定是否攤平。';
 
-格式要簡潔，適合手機閱讀。`
-      }]
-    })
-  })
-  .then(r => r.json())
-  .then(d => {
-    const text = d?.content?.[0]?.text || '分析失敗，請稍後再試';
-    const resultEl = document.getElementById('fund-ai-result');
-    if (resultEl) {
-      resultEl.innerHTML = text.replace(/\n/g,'<br>').replace(/【([^】]+)】/g,'<strong style="color:var(--text)">【$1】</strong>');
-    }
-  })
-  .catch(e => {
-    const resultEl = document.getElementById('fund-ai-result');
-    if (resultEl) resultEl.innerHTML = '<span style="color:var(--text3)">分析失敗，請稍後再試</span>';
-  });
+    var mktCtx = (twPct2 >= 1 || sp5Pct2 >= 1)
+      ? '今日台股' + (twPct2>=0?'上漲':'下跌') + ' ' + Math.abs(twPct2).toFixed(2) + '%，市場環境偏有利。'
+      : (twPct2 <= -1 || sp5Pct2 <= -1)
+      ? '今日市場走弱，短線波動加大，但長期定期定額策略不受影響。'
+      : '今日市場盤整，無明顯方向，長期持有基金不受短線影響。';
+
+    var risk = fund.name.includes('新興') || fund.name.includes('中國')
+      ? '新興市場基金波動較大，需注意匯率與地緣政治風險。'
+      : fund.name.includes('債') ? '債券基金受利率影響，升息環境下淨值承壓。'
+      : '股票型基金隨市場波動，建議搭配定期定額分散進場時間。';
+
+    var fundRows = [
+      ['目前狀況', status + '。' + mktCtx],
+      ['操作建議', advice],
+      ['風險提示', risk],
+    ];
+    resultEl.innerHTML = '<div style="display:grid;gap:10px;font-size:13px;line-height:1.75">'
+      + fundRows.map(function(r){ return '<div style="padding:8px 0;border-bottom:1px solid var(--border)"><div style="font-size:10px;font-weight:700;color:var(--gold);margin-bottom:3px">' + r[0] + '</div><div>' + r[1] + '</div></div>'; }).join('')
+      + '</div>';
+  }, 300);
 }
 
 function openEditModal(code, acct) {
