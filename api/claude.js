@@ -5,11 +5,10 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).end();
 
-  const KEY = 'AIzaSyCsz7qZrwRItKyAs7iB6wkK5cUD3xGZhnI';
+  const KEY = 'AIzaSyBb1yq0rIPbxbfKt78t-Kit6IsJYrn3U0Y';
   const { prompt } = req.body;
   if (!prompt) return res.status(400).json({ ok: false, error: 'no prompt' });
 
-  // v1 API + 最新 model 名稱
   const ATTEMPTS = [
     { ver: 'v1',    model: 'gemini-2.0-flash' },
     { ver: 'v1',    model: 'gemini-1.5-flash' },
@@ -30,7 +29,7 @@ export default async function handler(req, res) {
         signal: AbortSignal.timeout(15000),
       });
       const d = await r.json();
-      console.log(`${ver}/${model}:`, r.status, JSON.stringify(d).slice(0, 150));
+      console.log(`${ver}/${model}:`, r.status, JSON.stringify(d).slice(0, 200));
       const text = d?.candidates?.[0]?.content?.parts?.[0]?.text || '';
       if (text) return res.status(200).json({ ok: true, text, model });
     } catch(e) {
