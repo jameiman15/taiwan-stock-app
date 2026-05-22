@@ -1,4 +1,29 @@
-<!DOCTYPE html>
+<!DO
+
+  // API 即時更新明日開盤建議
+  setTimeout(function() {
+    if (!sp500 && !taiex) return;
+    const opPrompt = '你是台股分析師，根據以下數據給出明日台股開盤建議（繁體中文，直接給結論，2-3句）：\n'
+      + 'S&P500：'+(sp500?(sp500.changePct>=0?'+':'')+sp500.changePct.toFixed(2)+'%':'—')+'\n'
+      + '那斯達克：'+(nasdaq?(nasdaq.changePct>=0?'+':'')+nasdaq.changePct.toFixed(2)+'%':'—')+'\n'
+      + '費半：'+(sox?(sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%':'—')+'\n'
+      + '台積電ADR：'+(tsm?(tsm.changePct>=0?'+':'')+tsm.changePct.toFixed(2)+'%':'—')+'\n'
+      + '加權指數：'+(taiex?(taiex.changePct>=0?'+':'')+taiex.changePct.toFixed(2)+'%':'—')+'\n\n'
+      + '格式：第一句整體趨勢判斷，第二句哪些族群可布局，第三句風險提示。';
+    callAI(opPrompt, function(text) {
+      var vEl = document.getElementById('op-v');
+      var rEl = document.getElementById('op-r');
+      if (!vEl || !rEl) return;
+      var lines = text.trim().split('\n').filter(Boolean);
+      if (lines.length >= 2) {
+        vEl.textContent = lines[0];
+        rEl.textContent = lines.slice(1).join(' ');
+      } else {
+        vEl.textContent = text.length > 30 ? text.slice(0,30)+'...' : text;
+        rEl.textContent = text;
+      }
+    });
+  }, 500);CTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
@@ -339,12 +364,15 @@ async function callAI(prompt, onResult, onError) {
   try {
     const r = await fetch('/api/claude', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({prompt}), signal: AbortSignal.timeout(20000),
+      body: JSON.stringify({prompt}),
+      signal: AbortSignal.timeout(25000),
     });
+    if (!r.ok) { console.error('callAI HTTP', r.status); onError && onError(); return; }
     const d = await r.json();
-    if (d.ok && d.text) onResult(d.text);
-    else onError && onError();
-  } catch(e) { onError && onError(); }
+    console.log('callAI response:', d);
+    if (d.ok && d.text) { onResult(d.text); }
+    else { console.error('callAI no text:', d); onError && onError(); }
+  } catch(e) { console.error('callAI error:', e); onError && onError(); }
 }
 
 function savePF() {
@@ -548,7 +576,8 @@ function renderHome() {
     return `<div class="idx"><div class="idx-n">${name}${yesterdayTag}</div><div class="idx-v">${fmtN(d.price)}</div><div class="idx-c ${cls}">${s}${chgDisplay} (${s}${(d.changePct||0).toFixed(2)}%)</div></div>`;
   }
 
-  let opening = {v:'⏳ 等待數據',r:'載入美股資訊中...'};
+  let opening = {v:'⏳ AI分析中...',r:'正在根據美股數據產生建議...'};
+  // 先用靜態邏輯顯示，同時在背景呼叫 AI 更新
   if (sp500) {
     const avg = ((sp500.changePct||0)+(nasdaq?.changePct||0))/2;
     if (avg > 0.5) opening = {v:'📈 偏多，建議逢低布局',r:`S&P500+${sp500.changePct.toFixed(2)}%、那斯達克+${nasdaq?.changePct.toFixed(2)}%，台積電ADR ${tsm?((tsm.changePct>=0?'+':'')+tsm.changePct.toFixed(2)+'%'):'—'}。外資可望回流台股，半導體族群提前布局。`};
@@ -575,8 +604,8 @@ function renderHome() {
     </div>
     <div class="op-card">
       <div class="op-lbl">🌅 明日開盤建議</div>
-      <div class="op-v">${opening.v}</div>
-      <div class="op-r">${opening.r}</div>
+      <div class="op-v" id="op-v">${opening.v}</div>
+      <div class="op-r" id="op-r">${opening.r}</div>
     </div>
     <div class="sg">
       <div class="sc"><div class="sc-l">帳戶市值</div><div class="sc-v" style="font-size:13px;">NT$${Math.round(tv).toLocaleString()}</div></div>
@@ -814,7 +843,8 @@ function renderAI() {
       <div style="padding:16px;text-align:center;color:var(--text3);font-size:13px">⏳ AI 分析族群趨勢中...</div>
     </div>`;
 
-  // Gemini AI 族群趨勢
+  // Gemini AI 族群趨勢（延遲確保 DOM 已渲染）
+  setTimeout(function() {
   const _tS=gP('TAIEX'),_sS=gP('^SOX'),_s5=gP('^GSPC'),_tmc=gP('2330');
   const sEl=document.getElementById('sector-card');
   callAI(
@@ -835,6 +865,7 @@ function renderAI() {
     },
     function(){if(sEl)sEl.innerHTML='<div style="padding:8px;color:var(--text3);font-size:13px">族群分析載入失敗</div>';}
   );
+  }, 300);
 
 
   document.getElementById('p-ai').innerHTML += `
@@ -868,26 +899,50 @@ function renderAI() {
     }).join('')}
 
     <div class="st" style="margin-top:8px">持倉健診</div>
-    ${(acc.stocks||[]).map(s=>{
-      const d = DIAG[s.code]; if(!d) return '';
+    ${(acc.stocks||[]).map((s,si)=>{
       const p = gP(s.code);
       const _roi2 = p ? ((p.price - s.cost) / s.cost * 100) : 0;
-      const dynD = DIAG[s.code] || (
-        _roi2 >= 30  ? {a:'sell', l:'獲利了結', r:'持倉已大幅獲利，建議分批出場，鎖定利潤。'} :
-        _roi2 <= -10 ? {a:'stop', l:'評估停損', r:'虧損逾10%，建議重新評估，若基本面無改變可續抱，否則考慮停損。'} :
-        p && p.changePct >= 1  ? {a:'hold', l:'續抱',  r:'今日表現偏強，可續抱持有，設好停利點。'} :
-        p && p.changePct <= -2 ? {a:'watch',l:'觀察',  r:'今日小幅拉回，觀察量縮是否止穩，暫不加碼。'} :
-        {a:'hold', l:'續抱', r:'持倉穩健，建議持續追蹤基本面，等待明確訊號。'}
-      );
+      const dynD =
+        _roi2 >= 30  ? {a:'sell', l:'獲利了結'} :
+        _roi2 <= -10 ? {a:'stop', l:'評估停損'} :
+        p && p.changePct >= 1  ? {a:'hold',  l:'續抱'}  :
+        p && p.changePct <= -2 ? {a:'watch', l:'觀察'}  :
+        {a:'hold', l:'續抱'};
       const am = {sell:'acc-up',hold:'',watch:'acc-bl',add:'acc-dn',stop:'acc-up'};
-      return `<div class="card ${am[dynD.a]||''}">
+      const cardId = 'diag-card-'+si;
+      return `<div class="card ${am[dynD.a]||''}" id="${cardId}">
         <div class="sr"><div class="sl"><h3>${s.name}</h3>${tagH(dynD.a)}</div>
           <div class="sr-r"><div class="price">${p?'$'+fmtN(p.price):'---'}</div></div>
         </div>
-        <div style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.7">${dynD.r}</div>
+        <div id="diag-text-${si}" style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.7">
+          <span style="color:var(--text3)">⏳ AI 分析中...</span>
+        </div>
       </div>`;
     }).join('')}
     <div style="height:20px"></div>`;
+
+  // AI 批次健診所有持倉
+  const _taiexAI = gP('TAIEX'), _soxAI = gP('^SOX');
+  (acc.stocks||[]).forEach(function(s, si) {
+    const p = gP(s.code);
+    const _roi2 = p ? ((p.price - s.cost) / s.cost * 100) : 0;
+    const pnl2 = p ? Math.round((p.price - s.cost) * s.qty) : 0;
+    const diagPrompt2 = '你是台灣股市分析師，請用繁體中文對以下持股做健診（1-2句建議，直接給結論）：\n'
+      +'股票：'+s.name+'（'+s.code+'）\n'
+      +'類型：'+(s.type==='stock'?'個股':'ETF')+'\n'
+      +'持有損益：'+((_roi2>=0?'+':'')+_roi2.toFixed(1))+'%（'+((pnl2>=0?'+':'')+'NT$'+Math.abs(pnl2).toLocaleString())+'）\n'
+      +'今日漲跌：'+(p?((p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%'):'—')+'\n'
+      +'加權指數：'+(_taiexAI?(_taiexAI.changePct>=0?'+':'')+_taiexAI.changePct.toFixed(2)+'%':'—')+'\n'
+      +'費半：'+(_soxAI?(_soxAI.changePct>=0?'+':'')+_soxAI.changePct.toFixed(2)+'%':'—')+'\n\n'
+      +'請給出：操作建議（加倉/續抱/觀察/減碼/停損）+ 理由一句話。';
+    callAI(diagPrompt2, function(text) {
+      var el = document.getElementById('diag-text-'+si);
+      if (el) el.innerHTML = text.split('\n').join('<br>');
+    }, function() {
+      var el = document.getElementById('diag-text-'+si);
+      if (el) el.innerHTML = '<span style="color:var(--text3)">分析失敗</span>';
+    });
+  });
 }
 
 async function renderNews() {
@@ -903,11 +958,15 @@ async function renderNews() {
     const news = d?.news || [];
     if (!news.length) throw new Error('empty');
     if (!nEl) return;
-    nEl.innerHTML = news.map(n=>`<div class="ni" ${n.url?'onclick="window.open(\''+n.url+'\',\'_blank\')" style="cursor:pointer"':''}>
-      <div class="ni-s">${n.src||'市場新聞'} <span class="chip">${n.tag||'市場'}</span>${n.url?'<span style="float:right;font-size:10px;color:var(--text3)">閱讀 ›</span>':''}</div>
+    nEl.innerHTML = news.map(n=>{
+      const url = n.url || n.link || null;
+      const inner = `<div class="ni-s">${n.src||'市場新聞'} <span class="chip">${n.tag||'市場'}</span></div>
       <div class="ni-t">${n.title||n.t||''}</div>
-      <div class="ni-time">${n.time||n.tm||''}</div>
-    </div>`).join('');
+      <div class="ni-time">${n.time||n.tm||''}</div>`;
+      return url
+        ? `<a href="${url}" target="_blank" rel="noopener" style="display:block;text-decoration:none;color:inherit;border-bottom:1px solid var(--border)" class="ni">${inner}<div style="font-size:11px;color:var(--blue);margin-top:2px">閱讀完整新聞 →</div></a>`
+        : `<div class="ni">${inner}</div>`;
+    }).join('');
   } catch(e) {
     if (nEl) nEl.innerHTML = NEWS.map(n=>`<div class="ni">
       <div class="ni-s">${n.src} <span class="chip">${n.tag}</span></div>
@@ -1080,9 +1139,34 @@ function openAIDetail(code) {
           ['風險',   '需注意總體經濟變化、地緣政治風險，以及個股法說會是否符合市場預期。'],
         ].map(([k,v])=>`<div style="padding:9px 0;border-bottom:1px solid var(--border);display:flex;gap:10px"><div style="min-width:60px;font-size:11px;font-weight:700;color:var(--text3);padding-top:1px">${k}</div><div style="font-size:13px;color:var(--text);line-height:1.6">${v}</div></div>`).join('')}
       </div>
+      <div class="st">AI 即時操作建議</div>
+      <div class="card" id="rec-ai-result">
+        <div style="text-align:center;padding:12px;color:var(--text3);font-size:13px">⏳ AI 分析中...</div>
+      </div>
+      <div class="st">AI 即時深度分析</div>
+      <div class="card" id="rec-ai-card">
+        <div style="text-align:center;padding:12px;color:var(--text3);font-size:13px">⏳ AI 分析中...</div>
+      </div>
     </div>`;
   showPage('p-detail');
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
+
+  // API 即時分析推薦股
+  setTimeout(function() {
+    var _rp = gP(r.code);
+    var rPrompt = '你是台灣股市分析師，請用繁體中文分析以下推薦股票（3-4句）：\n'
+      +'股票：'+r.name+'（'+r.code+'）\n'
+      +'現價：'+(_rp?'$'+_rp.price.toFixed(2):'—')+'\n'
+      +'今日漲跌：'+(_rp?(_rp.changePct>=0?'+':'')+_rp.changePct.toFixed(2)+'%':'—')+'\n'
+      +'建議入場區：$'+r.entryLow+' ~ $'+r.entryHigh+'\n'
+      +'加權指數：'+(gP('TAIEX')?gP('TAIEX').price?.toLocaleString()+'點（'+(gP('TAIEX').changePct>=0?'+':'')+gP('TAIEX').changePct?.toFixed(2)+'%）':'—')+'\n\n'
+      +'請分析：目前技術面狀況、是否適合現在進場、具體操作建議（買進/觀望/等待）。';
+    var el=document.getElementById('rec-ai-result');
+    if(el) callAI(rPrompt,
+      function(t){el.innerHTML='<div style="font-size:13px;line-height:1.85">'+t.split('\n').join('<br>')+'</div>';},
+      function(){el.innerHTML='<span style="color:var(--text3)">分析載入失敗</span>';}
+    );
+  }, 300);
 }
 
 // ─── MODAL ──────────────────────────────────────────────────
