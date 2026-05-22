@@ -239,10 +239,39 @@ const DIAG = {
 };
 
 const AI_RECS = [
-  {code:'2379',name:'瑞昱',  score:87,a:'buy',  p:560, r:'Wi-Fi 7晶片出貨強勁，PC復甦受益股，Q2營收年增23%，本益比合理。'},
-  {code:'2303',name:'聯電',  score:81,a:'buy',  p:42.5,r:'28nm成熟製程訂單滿載，車用晶片需求強，本益比低於歷史均值。'},
-  {code:'6505',name:'台塑化',score:72,a:'buy',  p:68.5,r:'油價止跌回穩，煉油毛利回升，現金殖利率7.2%具吸引力。'},
-  {code:'3008',name:'大立光',score:65,a:'watch',p:1680,r:'iPhone 16訂單回溫，估值仍偏高，等待回測均線再進場。'},
+  {
+    code:'2379', name:'瑞昱', score:87, a:'buy',
+    // 建議入場區間：絕對價格，依技術面支撐+基本面合理本益比計算
+    entryLow:520, entryHigh:560, stop:480,
+    tech: '突破季線後量增走強，MACD 黃金交叉，RSI 約 58 健康區間，短中線趨勢偏多。',
+    fund: '2026Q1 EPS 年增約 25%，本益比約 18x，低於 Wi-Fi IC 同業均值 22x，具估值修復空間。',
+    chip: '外資連續 5 日買超，投信同步加碼，籌碼集中度提升。',
+    r:   'Wi-Fi 7 晶片出貨強勁，PC 復甦受益股，基本面與籌碼面雙強。',
+  },
+  {
+    code:'2303', name:'聯電', score:81, a:'buy',
+    entryLow:105, entryHigh:118, stop:97,
+    tech: '季線附近整理，短線均線多頭排列中，成交量溫和，等待突破前高確認趨勢。',
+    fund: '28nm 成熟製程稼動率逐季回升，車用與工業用晶片訂單能見度高，本益比約 12x 偏低。',
+    chip: '外資近期小幅買超，主力籌碼相對穩定，無明顯賣壓。',
+    r:   '28nm 成熟製程訂單滿載，本益比低於歷史均值，長期具投資價值。',
+  },
+  {
+    code:'6505', name:'台塑化', score:72, a:'buy',
+    entryLow:58, entryHigh:65, stop:53,
+    tech: '在年線附近形成底部支撐，短線反彈走勢，但月線仍壓，需觀察量能是否放大。',
+    fund: '油價止跌後煉油毛利明顯改善，殖利率約 6-7%，本益比偏低具防禦價值。',
+    chip: '外資近期持股穩定，融券回補帶動短線動能。',
+    r:   '油價回穩後煉油毛利改善，高殖利率具防禦性，適合存股型投資人。',
+  },
+  {
+    code:'3008', name:'大立光', score:65, a:'watch',
+    entryLow:1500, entryHigh:1650, stop:1400,
+    tech: '股價在年線上方震盪，短線偏弱整理，RSI 約 45 接近中性偏弱，尚未出現明確買點。',
+    fund: 'iPhone 鏡頭規格升級受益，但 2026 年 EPS 成長有限，目前本益比約 28x 仍偏高。',
+    chip: '外資呈現觀望，近期無明顯買超，法人態度保守。',
+    r:   'iPhone 供應鏈回溫但估值偏高，建議等待回測支撐區再考慮進場。',
+  },
 ];
 
 const NEWS = [
@@ -304,6 +333,19 @@ let S = {
 let PF = (() => {
   try { return JSON.parse(localStorage.getItem('pf_v3')) || DEFAULT_PF; } catch { return DEFAULT_PF; }
 })();
+
+// ─── Gemini AI proxy ────────────────────────────────────────
+async function callAI(prompt, onResult, onError) {
+  try {
+    const r = await fetch('/api/claude', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({prompt}), signal: AbortSignal.timeout(20000),
+    });
+    const d = await r.json();
+    if (d.ok && d.text) onResult(d.text);
+    else onError && onError();
+  } catch(e) { onError && onError(); }
+}
 
 function savePF() {
   try { localStorage.setItem('pf_v3', JSON.stringify(PF)); } catch {}
@@ -772,60 +814,27 @@ function renderAI() {
       <div style="padding:16px;text-align:center;color:var(--text3);font-size:13px">⏳ AI 分析族群趨勢中...</div>
     </div>`;
 
-  // 根據即時數據自動產生族群趨勢
-  setTimeout(() => {
-    const el = document.getElementById('sector-card');
-    if (!el) return;
-    const _taiex = gP('TAIEX'), _sox = gP('^SOX'), _sp500 = gP('^GSPC'), _tsmc = gP('2330');
-    const _nasdaq = gP('^IXIC');
-    const twPct   = _taiex?.changePct  || 0;
-    const soxPct  = _sox?.changePct    || 0;
-    const sp5Pct  = _sp500?.changePct  || 0;
-    const tsmcPct = _tsmc?.changePct   || 0;
-    const nasPct  = _nasdaq?.changePct || 0;
-
-    // 多頭族群邏輯
-    const bullGroups = [];
-    if (soxPct >= 1.5) bullGroups.push(`半導體（費半+${soxPct.toFixed(2)}%，台積電、聯發科、瑞昱等受惠）`);
-    if (tsmcPct >= 1)  bullGroups.push(`AI伺服器/CoWoS（台積電+${tsmcPct.toFixed(2)}%帶動奇鋐、創意、廣達等供應鏈）`);
-    if (sp5Pct >= 1)   bullGroups.push(`科技電子（美股偏強，廣達、鴻海、台達電等 AI 伺服器族群跟漲）`);
-    if (twPct >= 1)    bullGroups.push(`金融股（大盤走強時金融族群同步受惠，國泰金、富邦金值得關注）`);
-    if (bullGroups.length === 0) bullGroups.push('目前無明顯多頭族群，建議觀望為主');
-
-    // 觀察族群邏輯
-    const watchGroups = [];
-    if (Math.abs(soxPct) < 1.5) watchGroups.push('半導體族群（費半尚未明確方向，等待突破訊號）');
-    if (Math.abs(twPct) < 0.5)  watchGroups.push('傳產石化（量縮整理，等待原油價格回穩）');
-    watchGroups.push('航運股（景氣循環不明朗，等待運價指數確認方向）');
-
-    // 迴避族群邏輯
-    const avoidGroups = [];
-    if (soxPct <= -1.5) avoidGroups.push(`半導體（費半走弱，短線避免追高）`);
-    if (twPct <= -1)    avoidGroups.push('營建資產（升息環境不利，融資成本高）');
-    avoidGroups.push('虧損生技股（高本益比加上無獲利，風險偏高）');
-
-    // 本週重點
-    const weekFocus = soxPct >= 2
-      ? `費半強勢，台股 AI 族群為主軸，重點布局散熱（奇鋐）、CoWoS（創意）、伺服器（廣達、緯穎）。`
-      : twPct >= 1
-      ? `大盤偏多，但需選股不選市，聚焦有業績支撐的個股，避免追漲無基本面支撐的題材股。`
-      : twPct <= -1
-      ? `大盤偏弱，建議降低持股比重，保留現金等待止跌訊號，不宜逆勢加碼。`
-      : `大盤盤整，以個股為主，選有外資持續買超且本益比合理的個股，等待量能回升。`;
-
-    // Build HTML without template literal to avoid escaping issues
-    el.innerHTML = '<div style="font-size:13px;line-height:1.95;color:var(--text);display:grid;gap:12px">'
-      + '<div><div style="font-weight:700;margin-bottom:4px">🚀 多頭族群（可布局）</div>'
-      + '<div style="color:var(--text2)">' + bullGroups.map(g=>'・'+g).join('<br>') + '</div></div>'
-      + '<div><div style="font-weight:700;margin-bottom:4px">👁 觀察族群（等訊號）</div>'
-      + '<div style="color:var(--text2)">' + watchGroups.map(g=>'・'+g).join('<br>') + '</div></div>'
-      + '<div><div style="font-weight:700;margin-bottom:4px">⚠️ 迴避族群（暫不碰）</div>'
-      + '<div style="color:var(--text2)">' + avoidGroups.map(g=>'・'+g).join('<br>') + '</div></div>'
-      + '<div style="background:var(--surface2);border-radius:10px;padding:10px">'
-      + '<div style="font-weight:700;margin-bottom:4px">💡 本週操作重點</div>'
-      + '<div>' + weekFocus + '</div></div>'
-      + '</div>';
-  }, 800);
+  // Gemini AI 族群趨勢
+  const _tS=gP('TAIEX'),_sS=gP('^SOX'),_s5=gP('^GSPC'),_tmc=gP('2330');
+  const sEl=document.getElementById('sector-card');
+  callAI(
+    '你是台灣股市分析師，今日數據：\n'
+    +'加權指數：'+(_tS?_tS.price?.toLocaleString()+'點（'+(_tS.changePct>=0?'+':'')+_tS.changePct?.toFixed(2)+'%）':'—')+'\n'
+    +'台積電：'+(_tmc?'$'+_tmc.price?.toFixed(0)+'（'+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%）':'—')+'\n'
+    +'費半：'+(_sS?(_sS.changePct>=0?'+':'')+_sS.changePct?.toFixed(2)+'%':'—')+'\n'
+    +'S&P500：'+(_s5?(_s5.changePct>=0?'+':'')+_s5.changePct?.toFixed(2)+'%':'—')+'\n\n'
+    +'請用繁體中文給出台股族群趨勢結論（每項1-2句）：\n🚀 多頭族群（可布局）：\n👁 觀察族群（等訊號）：\n⚠️ 迴避族群（暫不碰）：\n💡 本週操作重點：',
+    function(text){
+      if(!sEl)return;
+      sEl.innerHTML='<div style="font-size:13px;line-height:1.9;color:var(--text)">'
+        +text.split('\n').filter(Boolean).map(function(l){
+          return (l.startsWith('🚀')||l.startsWith('👁')||l.startsWith('⚠')||l.startsWith('💡'))
+            ?'<div style="margin-top:10px;font-weight:700">'+l+'</div>'
+            :'<div style="margin-left:12px;color:var(--text2)">'+l+'</div>';
+        }).join('')+'</div>';
+    },
+    function(){if(sEl)sEl.innerHTML='<div style="padding:8px;color:var(--text3);font-size:13px">族群分析載入失敗</div>';}
+  );
 
 
   document.getElementById('p-ai').innerHTML += `
@@ -836,7 +845,18 @@ function renderAI() {
       return `<div class="card cp ${r.a==='buy'?'acc-dn':'acc-bl'}" onclick="openAIDetail('${r.code}')">
         <div class="sr">
           <div class="sl"><h3>${r.name} <span style="font-size:11px;font-weight:400;color:var(--text3)">${r.code}</span></h3>
-            <div class="meta">建議價 $${fmtN(r.p)}${p?` · 現價 $${fmtN(p.price)}`:''}</div>
+            <div class="meta" style="margin-top:4px">
+              ${p ? (()=>{
+                const inZone = p.price >= r.entryLow && p.price <= r.entryHigh;
+                const below  = p.price < r.entryLow;
+                const above  = p.price > r.entryHigh;
+                const zoneStr = '$'+fmtN(r.entryLow)+' ~ $'+fmtN(r.entryHigh);
+                const status = inZone ? '<span style="color:#166534;font-weight:700">✅ 現已在建議入場區</span>' :
+                               below  ? '<span style="color:#1d4ed8">📉 低於建議區，可積極布局</span>' :
+                                        '<span style="color:#92670a">⏳ 高於建議區，等待回測</span>';
+                return '建議入場區：'+zoneStr+' · 停損 $'+fmtN(r.stop)+'<br>'+status;
+              })() : '載入中'}
+            </div>
             ${tagH(r.a)}
           </div>
           <div class="sr-r"><div style="font-size:28px;font-weight:700;font-family:'Space Mono',monospace;color:${sc}">${r.score}</div>
@@ -877,52 +897,23 @@ async function renderNews() {
     <div class="card" id="news-card">
       <div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">⏳ 載入新聞中...</div>
     </div><div style="height:20px"></div>`;
-
+  const nEl = document.getElementById('news-card');
   try {
-    // 用 allorigins proxy 抓鉅亨網 RSS
-    const RSS_SOURCES = [
-      { url: 'https://www.cnyes.com/rss/cat/tw_stock', src: '🇹🇼 鉅亨網', tag: '台股' },
-      { url: 'https://www.cnyes.com/rss/cat/us_stock',  src: '🇺🇸 鉅亨網', tag: '美股' },
-      { url: 'https://www.cnyes.com/rss/cat/etf',       src: '🇹🇼 鉅亨網', tag: 'ETF'  },
-    ];
-    const proxy = 'https://api.allorigins.win/raw?url=';
-    const results = await Promise.allSettled(
-      RSS_SOURCES.map(async s => {
-        const r = await fetch(proxy + encodeURIComponent(s.url), { signal: AbortSignal.timeout(6000) });
-        if (!r.ok) return [];
-        const xml = await r.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(xml, 'text/xml');
-        const items = [...doc.querySelectorAll('item')].slice(0, 4);
-        return items.map(item => {
-          const pubDate = item.querySelector('pubDate')?.textContent || '';
-          const d = pubDate ? new Date(pubDate) : new Date();
-          const diff = Math.round((Date.now() - d.getTime()) / 60000);
-          const timeStr = diff < 60 ? diff + '分鐘前' : Math.round(diff/60) + '小時前';
-          return {
-            src: s.src, tag: s.tag,
-            t: item.querySelector('title')?.textContent?.trim() || '',
-            tm: timeStr,
-          };
-        });
-      })
-    );
-    let news = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
-
-    const el = document.getElementById('news-card');
-    if (!el) return;
-    if (!news.length) throw new Error('no news');
-    el.innerHTML = news.map(n => `<div class="ni">
-      <div class="ni-s">\${n.src} <span class="chip">\${n.tag}</span></div>
-      <div class="ni-t">\${n.t}</div>
-      <div class="ni-time">\${n.tm}</div>
+    const r = await fetch('/api/news', {signal: AbortSignal.timeout(18000)});
+    const d = await r.json();
+    const news = d?.news || [];
+    if (!news.length) throw new Error('empty');
+    if (!nEl) return;
+    nEl.innerHTML = news.map(n=>`<div class="ni">
+      <div class="ni-s">${n.src||'市場新聞'} <span class="chip">${n.tag||'市場'}</span></div>
+      <div class="ni-t">${n.title||n.t||''}</div>
+      <div class="ni-time">${n.time||n.tm||''}</div>
     </div>`).join('');
   } catch(e) {
-    const el = document.getElementById('news-card');
-    if (el) el.innerHTML = NEWS.map(n => `<div class="ni">
-      <div class="ni-s">\${n.src} <span class="chip">\${n.tag}</span></div>
-      <div class="ni-t">\${n.t}</div>
-      <div class="ni-time">\${n.tm}</div>
+    if (nEl) nEl.innerHTML = NEWS.map(n=>`<div class="ni">
+      <div class="ni-s">${n.src} <span class="chip">${n.tag}</span></div>
+      <div class="ni-t">${n.t}</div>
+      <div class="ni-time">${n.tm}</div>
     </div>`).join('');
   }
 }
@@ -1021,11 +1012,14 @@ function openDetail(code) {
 
 
   // 根據即時數據自動產生健診（免費，無需 API）
-  setTimeout(function() {
+  // 立即執行（不用 setTimeout，避免閉包問題）
+  (function() {
     var el = document.getElementById('diag-result');
     if (!el) return;
-    var twPct  = taiex ? taiex.changePct : 0;
-    var soxPct = sox   ? sox.changePct   : 0;
+    var _taiexNow = gP('TAIEX');
+    var _soxNow   = gP('^SOX');
+    var twPct  = _taiexNow ? _taiexNow.changePct : 0;
+    var soxPct = _soxNow   ? _soxNow.changePct   : 0;
     var isETF  = s.type === 'etf';
 
     var techSign = p && p.changePct >= 2  ? '強勢上漲，短線動能充足' :
@@ -1098,12 +1092,31 @@ function openAIDetail(code) {
       <div class="st">操作建議</div>
       <div class="card">
         ${tagH(r.a)}
-        <div style="margin-top:6px;font-size:13px;color:var(--text2)">建議進場價：<strong>$${fmtN(r.p)}</strong> ${p?` · 現價：<strong>$${fmtN(p.price)}</strong>`:''}</div>
+        ${p ? (()=>{
+          const inZone = p.price >= r.entryLow && p.price <= r.entryHigh;
+          const below  = p.price < r.entryLow;
+          const statusTxt = inZone ? '✅ 現價已在建議入場區間內，可考慮分批買進' :
+                            below  ? '📉 現價低於建議區，具吸引力，可積極布局' :
+                                     '⏳ 現價高於建議區，建議等待回測再進場';
+          const statusColor = inZone ? '#166534' : below ? '#1d4ed8' : '#92670a';
+          return '<div style="background:var(--surface2);border-radius:10px;padding:12px;margin-top:8px;font-size:13px;line-height:1.8">'
+            + '<div style="display:flex;justify-content:space-between;margin-bottom:6px">'
+            + '<span style="color:var(--text3)">建議入場區</span><strong>$'+fmtN(r.entryLow)+' ~ $'+fmtN(r.entryHigh)+'</strong></div>'
+            + '<div style="display:flex;justify-content:space-between;margin-bottom:8px">'
+            + '<span style="color:var(--text3)">建議停損</span><strong style="color:var(--up)">$'+fmtN(r.stop)+'</strong></div>'
+            + '<div style="color:'+statusColor+';font-weight:600">'+statusTxt+'</div>'
+            + '</div>';
+        })() : ''}
         <div style="font-size:13px;color:var(--text);margin-top:10px;line-height:1.75">${r.r}</div>
       </div>
-      <div class="st">技術 &amp; 基本面</div>
+      <div class="st">技術 &amp; 基本面分析</div>
       <div class="card">
-        ${[['技術面','強勢突破季線，MACD黃金交叉，RSI 58 健康區間'],['基本面','本益比18.5x 低於產業均值，EPS年增25%'],['籌碼面','外資連3日買超，投信同步加碼'],['風險','需注意美中科技戰擴大風險']].map(([k,v])=>`<div style="padding:9px 0;border-bottom:1px solid var(--border);display:flex;gap:10px"><div style="min-width:60px;font-size:11px;font-weight:700;color:var(--text3);padding-top:1px">${k}</div><div style="font-size:13px;color:var(--text);line-height:1.6">${v}</div></div>`).join('')}
+        ${[
+          ['技術面', r.tech],
+          ['基本面', r.fund],
+          ['籌碼面', r.chip],
+          ['風險',   '需注意總體經濟變化、地緣政治風險，以及個股法說會是否符合市場預期。'],
+        ].map(([k,v])=>`<div style="padding:9px 0;border-bottom:1px solid var(--border);display:flex;gap:10px"><div style="min-width:60px;font-size:11px;font-weight:700;color:var(--text3);padding-top:1px">${k}</div><div style="font-size:13px;color:var(--text);line-height:1.6">${v}</div></div>`).join('')}
       </div>
     </div>`;
   showPage('p-detail');
@@ -1556,46 +1569,28 @@ function openFundAI(code, acct) {
     sox   ? `費城半導體 ${sox.price?.toFixed(0)}（${sox.changePct>=0?'+':''}${sox.changePct}%）` : '',
   ].filter(Boolean).join('、');
 
-  // 根據持倉數據自動產生基金分析
-  setTimeout(function() {
-    var resultEl = document.getElementById('fund-ai-result');
-    if (!resultEl) return;
-    var roiNum = parseFloat(roi);
-    var _t = gP('TAIEX'), _s = gP('^GSPC');
-    var twPct2 = _t ? _t.changePct : 0, sp5Pct2 = _s ? _s.changePct : 0;
-
-    var status = roiNum >= 20 ? '持倉大幅獲利，表現優異' :
-                 roiNum >= 5  ? '持倉小幅獲利，穩健成長' :
-                 roiNum >= -5 ? '持倉接近成本，盤整中'   :
-                 roiNum >= -15? '持倉出現虧損，需要關注' : '持倉虧損較大，建議重新評估';
-
-    var advice = roiNum >= 30  ? '建議分批獲利了結（賣出 1/3），保留部分繼續持有，鎖定利潤。' :
-                 roiNum >= 10  ? '持倉表現良好，建議續抱。市場持續向好可小幅加碼。' :
-                 roiNum >= -10 ? '持倉在合理範圍，建議定期定額持續扣款，攤低成本。' :
-                 '持倉虧損偏大，先暫停加碼，待市場訊號明確後再決定是否攤平。';
-
-    var mktCtx = (twPct2 >= 1 || sp5Pct2 >= 1)
-      ? '今日台股' + (twPct2>=0?'上漲':'下跌') + ' ' + Math.abs(twPct2).toFixed(2) + '%，市場環境偏有利。'
-      : (twPct2 <= -1 || sp5Pct2 <= -1)
-      ? '今日市場走弱，短線波動加大，但長期定期定額策略不受影響。'
-      : '今日市場盤整，無明顯方向，長期持有基金不受短線影響。';
-
-    var risk = fund.name.includes('新興') || fund.name.includes('中國')
-      ? '新興市場基金波動較大，需注意匯率與地緣政治風險。'
-      : fund.name.includes('債') ? '債券基金受利率影響，升息環境下淨值承壓。'
-      : '股票型基金隨市場波動，建議搭配定期定額分散進場時間。';
-
-    var fundRows = [
-      ['目前狀況', status + '。' + mktCtx],
-      ['操作建議', advice],
-      ['風險提示', risk],
-    ];
-    resultEl.innerHTML = '<div style="display:grid;gap:10px;font-size:13px;line-height:1.75">'
-      + fundRows.map(function(r){ return '<div style="padding:8px 0;border-bottom:1px solid var(--border)"><div style="font-size:10px;font-weight:700;color:var(--gold);margin-bottom:3px">' + r[0] + '</div><div>' + r[1] + '</div></div>'; }).join('')
-      + '</div>';
-  }, 300);
+  // Gemini AI 基金分析
+  const _tF=gP('TAIEX'),_sF=gP('^GSPC');
+  callAI(
+    '你是台灣基金投資顧問，請用繁體中文分析以下基金，簡潔適合手機。\n'
+    +'基金：'+fund.name+'\n'
+    +'投入：NT$'+fund.cost.toLocaleString()+'\n'
+    +'市值：NT$'+Math.round(mv).toLocaleString()+'\n'
+    +'損益：'+(roi>=0?'+':'')+roi+'%\n'
+    +'加權：'+(_tF?(_tF.changePct>=0?'+':'')+_tF.changePct?.toFixed(2)+'%':'—')+'\n'
+    +'S&P500：'+(_sF?(_sF.changePct>=0?'+':'')+_sF.changePct?.toFixed(2)+'%':'—')+'\n\n'
+    +'請分析：\n【目前狀況】\n【操作建議】加倉/續抱/減碼\n【風險提示】',
+    function(text){
+      var el=document.getElementById('fund-ai-result');
+      if(!el)return;
+      el.innerHTML='<div style="font-size:13px;line-height:1.85">'+text.split('\n').join('<br>').replace(/【([^】]+)】/g,'<br><strong style="color:var(--gold);font-size:11px">【$1】</strong><br>')+'</div>';
+    },
+    function(){
+      var el=document.getElementById('fund-ai-result');
+      if(el)el.innerHTML='<span style="color:var(--text3)">分析失敗，請稍後再試</span>';
+    }
+  );
 }
-
 function openEditModal(code, acct) {
   const s = (PF[acct]?.stocks || []).find(x => x.code === code);
   if (!s) return;
