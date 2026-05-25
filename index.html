@@ -897,7 +897,7 @@ function renderAI() {
       const am = {sell:'acc-up',hold:'',watch:'acc-bl',add:'acc-dn',stop:'acc-up'};
       const cardId = 'diag-card-'+si;
       return `<div class="card ${am[dynD.a]||''}" id="${cardId}">
-        <div class="sr"><div class="sl"><h3>${s.name}</h3>${tagH(dynD.a)}</div>
+        <div class="sr"><div class="sl"><h3>${s.name}</h3><span id="diag-tag-${si}">${tagH(dynD.a)}</span></div>
           <div class="sr-r"><div class="price">${p?'$'+fmtN(p.price):'---'}</div></div>
         </div>
         <div id="diag-text-${si}" style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.7">
@@ -914,16 +914,34 @@ function renderAI() {
     if (titleEl) titleEl.textContent = '📊 AI 今日選股 · '+today;
 
     var _t=gP('TAIEX'),_s=gP('^SOX'),_s5=gP('^GSPC'),_tmc=gP('2330');
-    var rPrompt = '你是台灣股市分析師，今天是'+today+'。今日市場：\n'
-      +'加權：'+(_t?_t.price?.toLocaleString()+'點（'+(_t.changePct>=0?'+':'')+_t.changePct?.toFixed(2)+'%）':'—')+'\n'
-      +'費半：'+(_s?(_s.changePct>=0?'+':'')+_s.changePct?.toFixed(2)+'%':'—')+'\n'
+    var rPrompt = '你是一位資深台灣股市基金經理人，勝率長期高於90%。今天是'+today+'。\n'
+      +'今日市場數據：\n'
+      +'加權指數：'+(_t?_t.price?.toLocaleString()+'點（'+(_t.changePct>=0?'+':'')+_t.changePct?.toFixed(2)+'%）':'—')+'\n'
+      +'費城半導體：'+(_s?(_s.changePct>=0?'+':'')+_s.changePct?.toFixed(2)+'%':'—')+'\n'
       +'S&P500：'+(_s5?(_s5.changePct>=0?'+':'')+_s5.changePct?.toFixed(2)+'%':'—')+'\n'
       +'台積電：'+(_tmc?'$'+_tmc.price?.toFixed(0)+'（'+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%）':'—')+'\n\n'
-      +'請推薦10支台股標的，回覆只有JSON陣列，每個物件格式：\n'
-      +'{"g":1或2,"code":"代碼","name":"名稱","entry":建議入場價數字,"stop":停損價數字,"score":評分1-100,"r":"推薦理由一句話"}\n'
-      +'g=1：現價已在合理入場區間（5支）\n'
-      +'g=2：體質好但現價偏高需等待（5支）\n'
-      +'只回JSON，不要任何說明文字。';
+      +'請以下列專業框架選出10支台股標的：\n'
+      +'【分析框架】\n'
+      +'1. 商業模式與護城河：產品/服務是否具競爭優勢\n'
+      +'2. 收入結構：營收來源是否多元穩定，重複性收入比例\n'
+      +'3. 毛利率與獲利能力：毛利率趨勢、EPS成長性、ROE水準\n'
+      +'4. 成長動能：法說會展望、訂單能見度、產業趨勢\n'
+      +'5. 估值合理性：本益比/PBR相對歷史均值與同業是否偏低\n'
+      +'6. 籌碼面：外資、投信近期動向，主力籌碼集中度\n'
+      +'7. 技術面：均線多空排列、MACD、RSI、量價關係\n'
+      +'8. 核心風險：主要下行風險一句話\n\n'
+      +'【評分標準】score 1-100：\n'
+      +'90+：基本面+技術面+籌碼面三強共振，強力推薦\n'
+      +'80-89：兩面向強，一面向中性，推薦\n'
+      +'70-79：基本面佳但技術面待確認，條件式推薦\n\n'
+      +'【回覆格式】只回JSON陣列，10個物件，不要任何說明文字：\n'
+      +'{"g":1或2,"code":"台股代碼","name":"名稱","currentPrice":合理現價,"entry":建議入場價,"stop":停損價,"score":評分,"r":"30字內的核心推薦理由，含估值、動能、籌碼三要素"}\n'
+      +'【分組規則】\n'
+      +'g=1（可進場，5支）：entry<=currentPrice，技術面已啟動，籌碼偏多\n'
+      +'g=2（等待，5支）：entry<currentPrice，基本面優但現價偏高需等回測\n'
+      +'【價格規則】\n'
+      +'entry必須在currentPrice的±15%以內，stop必須是entry的88-95%\n'
+      +'代碼用台股代碼（如2330、0050、00878），不用英文代碼';
 
     callAI(rPrompt, function(text) {
       try {
@@ -934,12 +952,28 @@ function renderAI() {
         var inZone = recs.filter(function(r){return r.g===1;});
         var waiting = recs.filter(function(r){return r.g===2;});
 
+        // 把推薦股代碼加入股價查詢（如果還沒有現價）
+        var recCodes = recs.map(function(r){return r.code;}).filter(function(c){return !gP(c);});
+        if (recCodes.length > 0) {
+          fetch('/api/prices?codes='+recCodes.join(','), {signal: AbortSignal.timeout(10000)})
+            .then(function(res){return res.json();})
+            .then(function(d){
+              if (d.data) Object.assign(S.prices, d.data);
+              // 重新渲染卡片顯示現價
+              var izEl=document.getElementById('recs-in-zone');
+              var wzEl=document.getElementById('recs-wait-zone');
+              izEl.innerHTML=''; wzEl.innerHTML='';
+              if(inZone.length) inZone.forEach(function(r){izEl.appendChild(makeCard(r));});
+              if(waiting.length) waiting.forEach(function(r){wzEl.appendChild(makeCard(r));});
+            }).catch(function(){});
+        }
+
         function makeCard(r) {
           var p = gP(r.code);
-          var cp = p ? p.price : null;
+          var cp = p ? p.price : (r.currentPrice || null);
           var sc = r.score>=80?'#16a34a':r.score>=65?'#d97706':'#888';
           var pi = cp ? ('現價 <b>$'+fmtN(cp)+'</b> · 入場 $'+fmtN(r.entry)+' · 停損 $'+fmtN(r.stop))
-                      : ('建議入場 $'+fmtN(r.entry)+' · 停損 $'+fmtN(r.stop));
+                      : ('參考價 $'+fmtN(r.currentPrice||r.entry)+' · 入場 $'+fmtN(r.entry)+' · 停損 $'+fmtN(r.stop));
           var el = document.createElement('div');
           el.className='card cp';
           el.style.cssText='margin-bottom:8px;cursor:pointer';
@@ -984,17 +1018,33 @@ function renderAI() {
     const p = gP(s.code);
     const _roi2 = p ? ((p.price - s.cost) / s.cost * 100) : 0;
     const pnl2 = p ? Math.round((p.price - s.cost) * s.qty) : 0;
-    const diagPrompt2 = '你是台灣股市分析師，請用繁體中文對以下持股做健診（1-2句建議，直接給結論）：\n'
+    const diagPrompt2 = '你是資深台灣股市經理人，勝率90%以上。請用繁體中文對以下持股做快速健診（直接給結論，不超過3句）：\n'
       +'股票：'+s.name+'（'+s.code+'）\n'
       +'類型：'+(s.type==='stock'?'個股':'ETF')+'\n'
-      +'持有損益：'+((_roi2>=0?'+':'')+_roi2.toFixed(1))+'%（'+((pnl2>=0?'+':'')+'NT$'+Math.abs(pnl2).toLocaleString())+'）\n'
+      +'持有成本：$'+s.cost+' / 持有損益：'+((_roi2>=0?'+':'')+_roi2.toFixed(1))+'%（'+((pnl2>=0?'+':'')+'NT$'+Math.abs(pnl2).toLocaleString())+'）\n'
       +'今日漲跌：'+(p?((p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%'):'—')+'\n'
       +'加權指數：'+(_taiexAI?(_taiexAI.changePct>=0?'+':'')+_taiexAI.changePct.toFixed(2)+'%':'—')+'\n'
       +'費半：'+(_soxAI?(_soxAI.changePct>=0?'+':'')+_soxAI.changePct.toFixed(2)+'%':'—')+'\n\n'
-      +'請給出：操作建議（加倉/續抱/觀察/減碼/停損）+ 理由一句話。';
+      +'請從三面向快速評估並給出操作建議：\n'
+      +'① 基本面：商業模式護城河、毛利率趨勢、EPS成長\n'
+      +'② 技術面：均線位置、趨勢強弱、量價關係\n'
+      +'③ 籌碼面：外資投信動向\n'
+      +'最後給明確操作建議（加倉/續抱/觀察/減碼/停損）及理由，含目標價或停損點。';
     callAI(diagPrompt2, function(text) {
       var el = document.getElementById('diag-text-'+si);
       if (el) el.innerHTML = text.split('\n').join('<br>');
+      // 根據 AI 結論更新標籤
+      var tagEl = document.getElementById('diag-tag-'+si);
+      if (tagEl) {
+        var lowerText = text.toLowerCase();
+        var newAction = 'hold';
+        if (text.includes('停損') || text.includes('出場') || text.includes('賣出')) newAction = 'sell';
+        else if (text.includes('加倉') || text.includes('加碼') || text.includes('買進')) newAction = 'add';
+        else if (text.includes('觀察') || text.includes('觀望')) newAction = 'watch';
+        else if (text.includes('續抱') || text.includes('持有') || text.includes('維持')) newAction = 'hold';
+        else if (text.includes('減碼') || text.includes('獲利了結')) newAction = 'sell';
+        tagEl.innerHTML = tagH(newAction);
+      }
     }, function() {
       var el = document.getElementById('diag-text-'+si);
       if (el) el.innerHTML = '<span style="color:var(--text3)">分析失敗</span>';
