@@ -90,13 +90,12 @@ export default async function handler(req, res) {
           `https://api.fugle.tw/marketdata/v1.0/futopt/intraday/quote/${sym}`,
           { headers: { 'X-API-KEY': FUGLE_KEY }, signal: AbortSignal.timeout(5000) }
         );
-        if (r.ok) {
-          const d = await r.json();
-          if (d && (d.lastPrice || d.closePrice || d.previousClose)) {
-            txfData = d; break;
-          }
+        const d = await r.json();
+        console.log(`TXF sym=${sym} status=${r.status} keys=${Object.keys(d||{}).join(',')} lastPrice=${d?.lastPrice} closePrice=${d?.closePrice} prevClose=${d?.previousClose}`);
+        if (r.ok && d && (d.lastPrice || d.closePrice || d.previousClose)) {
+          txfData = d; break;
         }
-      } catch(e2) {}
+      } catch(e2) { console.log('TXF error:', e2.message); }
     }
     if (txfData) {
       const isOpen = txfData.lastPrice && (txfData.total?.tradeVolume ?? 0) > 0;
