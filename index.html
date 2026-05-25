@@ -824,6 +824,74 @@ function runBatchDiag() {
   });
 }
 
+function openDailyReport() {
+  // 建立報告 overlay
+  document.getElementById('daily-report-modal')?.remove();
+  const el = document.createElement('div');
+  el.className = 'overlay'; el.id = 'daily-report-modal';
+  el.innerHTML = `<div class="sheet" style="max-height:85vh;overflow-y:auto">
+    <div class="handle"></div>
+    <div style="font-size:17px;font-weight:700;margin-bottom:4px">📋 每日AI投資報告</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px">${new Date().toLocaleDateString('zh-TW')} · 台股+美股 AI精選</div>
+    <div id="daily-report-content" style="font-size:13px;line-height:1.9;color:var(--text)">
+      <div style="text-align:center;padding:30px;color:var(--text3)">⏳ AI 正在分析市場，約需15-30秒...</div>
+    </div>
+    <button class="btn-o" style="margin-top:16px" onclick="document.getElementById('daily-report-modal').remove()">關閉</button>
+  </div>`;
+  el.addEventListener('click', e => { if(e.target===el) el.remove(); });
+  document.body.appendChild(el);
+
+  const _t=gP('TAIEX'),_s=gP('^SOX'),_s5=gP('^GSPC'),_tmc=gP('2330'),_nas=gP('^IXIC');
+  const today = new Date().toLocaleDateString('zh-TW');
+
+  const reportPrompt = `你是一位擁有50年實戰經驗的資深企業經理人、股票研究員與投資顧問。今天是${today}。
+
+今日市場數據：
+加權指數：${_t?_t.price?.toLocaleString()+'點（'+(_t.changePct>=0?'+':'')+_t.changePct?.toFixed(2)+'%）':'—'}
+費城半導體：${_s?(_s.changePct>=0?'+':'')+_s.changePct?.toFixed(2)+'%':'—'}
+S&P500：${_s5?(_s5.changePct>=0?'+':'')+_s5.changePct?.toFixed(2)+'%':'—'}
+那斯達克：${_nas?(_nas.changePct>=0?'+':'')+_nas.changePct?.toFixed(2)+'%':'—'}
+台積電：${_tmc?'$'+_tmc.price?.toFixed(0)+'（'+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%）':'—'}
+
+請用保守、理性、數據導向的方式，幫我篩選值得買進的AI相關股票（台股+美股），從以下角度分析：
+✅ 企業經營品質與商業模式護城河
+✅ 產業趨勢（真正受惠AI的原因）
+✅ 財務體質（營收成長、毛利率、現金流）
+✅ 競爭優勢與產業地位
+✅ 估值合理性（本益比、PBR vs歷史均值）
+✅ 風險控管
+
+請列出5~10檔候選股票，每檔說明：
+1. 真正受惠AI的原因
+2. 近年營收與獲利趨勢
+3. 毛利率與現金流狀況
+4. 目前估值是否合理
+5. 建議操作：可分批買進 / 等待回檔 / 觀察 / 避開
+
+最後選出最值得優先研究的3檔，提供：
+- 合理買進區間
+- 分批布局方式
+- 停損條件
+- 主要風險
+
+並特別提醒哪些股票雖然熱門但可能已過熱，不建議追高。
+
+格式清晰，適合手機閱讀，使用繁體中文。`;
+
+  callAI(reportPrompt, function(text) {
+    const el = document.getElementById('daily-report-content');
+    if (el) {
+      el.innerHTML = text
+        .split('\n').join('<br>')
+        .replace(/#{1,3} ([^\n]+)/g, '<div style="font-weight:700;font-size:15px;margin:12px 0 4px">$1</div>')
+        .replace(/✅|🔴|⚠️|💡|📊|🚀/g, m => '<span style="font-size:16px">'+m+'</span>');
+    }
+  }, function() {
+    const el = document.getElementById('daily-report-content');
+    if (el) el.innerHTML = '<div style="color:var(--text3);text-align:center;padding:20px">報告生成失敗，請稍後再試</div>';
+  });
+}
+
 function renderAI() {
   const acc = PF[S.acct] || {stocks:[],funds:[]};
   const now = new Date();
@@ -904,6 +972,14 @@ function renderAI() {
   const usEmoji = usAvgPct > 1 ? '🚀' : usAvgPct > 0 ? '📈' : usAvgPct < -1 ? '💥' : '📉';
 
   document.getElementById('p-ai').innerHTML = `
+    <!-- 每日AI投資報告按鈕 -->
+    <div class="card" style="background:linear-gradient(135deg,#1e1b4b,#312e81);color:#fff;cursor:pointer" onclick="openDailyReport()">
+      <div style="font-size:10px;opacity:.6;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">📋 每日AI投資報告</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:4px">台股+美股 AI精選標的</div>
+      <div style="font-size:12px;opacity:.7">保守理性·數據導向·50年實戰框架分析</div>
+      <div style="font-size:11px;opacity:.5;margin-top:8px">點擊生成今日報告 · 約15-30秒</div>
+    </div>
+
     <!-- 美股日報 -->
     <div class="card acc-gd" style="background:#fffdf5">
       <div style="font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📋 美股日報 · ${(now.getMonth()+1)+'月'+now.getDate()+'日'}</div>
@@ -1033,7 +1109,13 @@ function renderAI() {
       +'g=2（等待，5支）：entry<currentPrice，基本面優但現價偏高需等回測\n'
       +'【價格規則】\n'
       +'entry必須在currentPrice的±15%以內，stop必須是entry的88-95%\n'
-      +'代碼用台股代碼（如2330、0050、00878），不用英文代碼';
+      +'【選股任務】請推薦10支台股標的，只回JSON陣列，格式如下：\n'
+      +'[{"g":1,"code":"2330","name":"台積電","entryPct":1.00,"stopPct":0.93,"score":95,"r":"CoWoS滿載外資持續買超本益比合理"},...]\n'
+      +'【規則】\n'
+      +'g=1（可進場5支）：現在就可分批買進，entryPct設0.98~1.02\n'
+      +'g=2（等待5支）：基本面好但偏高需等回測，entryPct設0.88~0.96\n'
+      +'entryPct/stopPct是相對現價的倍數，stopPct必須<entryPct\n'
+      +'code必須是真實台股代碼不可重複，只回JSON不要任何說明';
 
     callAI(rPrompt, function(text) {
       try {
@@ -1041,6 +1123,13 @@ function renderAI() {
         var recs = JSON.parse(clean);
         if (!Array.isArray(recs)) throw new Error('not array');
 
+        // 過濾掉重複代碼
+        var seenCodes = {};
+        recs = recs.filter(function(r) {
+          if (!r.code || seenCodes[r.code]) return false;
+          seenCodes[r.code] = true;
+          return true;
+        });
         var inZone = recs.filter(function(r){return r.g===1;});
         var waiting = recs.filter(function(r){return r.g===2;});
 
@@ -1048,10 +1137,16 @@ function renderAI() {
 
         function makeCard(r) {
           var p = gP(r.code);
-          var cp = p ? p.price : (r.currentPrice || null);
+          var cp = p ? p.price : null;
           var sc = r.score>=80?'#16a34a':r.score>=65?'#d97706':'#888';
-          var pi = cp ? ('現價 <b>$'+fmtN(cp)+'</b> · 入場 $'+fmtN(r.entry)+' · 停損 $'+fmtN(r.stop))
-                      : ('參考價 $'+fmtN(r.currentPrice||r.entry)+' · 入場 $'+fmtN(r.entry)+' · 停損 $'+fmtN(r.stop));
+          // 用現價 × entryPct 計算建議入場價，確保合理
+          var entryPrice = cp && r.entryPct ? Math.round(cp * r.entryPct) : (r.entry || null);
+          var stopPrice  = cp && r.stopPct  ? Math.round(cp * r.stopPct)  : (r.stop  || null);
+          // g=1 且入場價高於現價 → 修正為現價（表示現在就能進場）
+          if (r.g===1 && cp && entryPrice > cp) entryPrice = Math.round(cp);
+          var pi = cp
+            ? ('現價 <b>$'+fmtN(cp)+'</b> · 建議入場 $'+fmtN(entryPrice)+' · 停損 $'+fmtN(stopPrice))
+            : ('建議入場約現價×'+(r.entryPct||0.98)+' · 停損約現價×'+(r.stopPct||0.93));
           var el = document.createElement('div');
           el.className='card cp';
           el.style.cssText='margin-bottom:8px;cursor:pointer';
@@ -1061,13 +1156,13 @@ function renderAI() {
             +'</div><div class="sr-r"><div style="font-size:24px;font-weight:700;font-family:monospace;color:'+sc+'">'+r.score+'</div>'
             +'<div style="font-size:10px;color:var(--text3)">評分</div></div></div>'
             +'<div style="font-size:12px;color:var(--text2);margin-top:6px;line-height:1.6">'+r.r+'</div>';
-          el.onclick = function() {
-            // 動態加入 AI_RECS 並開啟詳情
-            var existing = AI_RECS.find(function(x){return x.code===r.code;});
-            if (!existing) AI_RECS.push({code:r.code,name:r.name,score:r.score,a:'buy',
-              entryLow:r.entry*0.98,entryHigh:r.entry*1.02,stop:r.stop,tech:'',fund:'',chip:'',r:r.r});
-            openAIDetail(r.code);
-          };
+          el.onclick = (function(rec, ep, sp) { return function() {
+            var existing = AI_RECS.find(function(x){return x.code===rec.code;});
+            if (!existing) AI_RECS.push({code:rec.code,name:rec.name,score:rec.score,a:'buy',
+              entryLow:ep*0.98, entryHigh:ep*1.02, stop:sp,
+              tech:'', fund:'', chip:'', r:rec.r});
+            openAIDetail(rec.code);
+          }; })(r, entryPrice||0, stopPrice||0);
           return el;
         }
 
