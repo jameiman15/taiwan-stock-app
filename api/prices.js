@@ -60,88 +60,38 @@ export default async function handler(req, res) {
     }
   } catch(e) {}
 
-  // ── 3. 台指期近月 via Fugle futopt endpoint ───────────────────────
-  // 台指期代碼格式：TXF + 月份英文字母 + 年份末碼
-  // 月份對照：1=A 2=B 3=C 4=D 5=E 6=F 7=G 8=H 9=I 10=J 11=K 12=L
-  // 結算日：每月第三個星期三，結算後近月換成下個月
+  // ── 3. 台指期 via Yahoo Finance（Fugle 期貨需付費，改用 Yahoo）──
   try {
-    const now = new Date();
-    const monthCodes = ['A','B','C','D','E','F','G','H','I','J','K','L'];
-    const yr = String(now.getFullYear()).slice(-1);
-
-    // 計算當月第三個星期三
-    const y = now.getFullYear(), mo = now.getMonth();
-    let wedCount = 0, settlDay = 0;
-    for (let d = 1; d <= 31; d++) {
-      const dt = new Date(y, mo, d);
-      if (dt.getMonth() !== mo) break;
-      if (dt.getDay() === 3) { wedCount++; if (wedCount === 3) { settlDay = d; break; } }
-    }
-    // 若今天已過結算日，近月從下個月開始
-    const baseMonth = (now.getDate() > settlDay) ? (mo + 1) % 12 : mo;
-    const months = [baseMonth, (baseMonth + 1) % 12];
-    let txfData = null;
-    for (const m of months) {
-      // 跨年處理：12月結算後換隔年1月，年份末碼要+1
-      const symYr = (m < mo && mo === 11) ? String(now.getFullYear() + 1).slice(-1) : yr;
-      const sym = `TXF${monthCodes[m]}${symYr}`;
-      try {
-        const r = await fetch(
-          `https://api.fugle.tw/marketdata/v1.0/futopt/intraday/quote/${sym}`,
-          { headers: { 'X-API-KEY': FUGLE_KEY }, signal: AbortSignal.timeout(5000) }
-        );
-        const d = await r.json();
-        console.log(`TXF sym=${sym} status=${r.status} keys=${Object.keys(d||{}).join(',')} lastPrice=${d?.lastPrice} closePrice=${d?.closePrice} prevClose=${d?.previousClose}`);
-        if (r.ok && d && (d.lastPrice || d.closePrice || d.previousClose)) {
-          txfData = d; break;
+    const txfUrl = `https://query2.finance.yahoo.com/v8/finance/chart/TW%3DF?interval=1d&range=5d`;
+    const txfR = await fetch(txfUrl, {
+      headers: { 'User-Agent': UA, 'Accept': 'application/json', 'Referer': 'https://finance.yahoo.com' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (txfR.ok) {
+      const txfD = await txfR.json();
+      const result = txfD?.chart?.result?.[0];
+      if (result) {
+        const meta   = result.meta;
+        const closes = (result.indicators?.quote?.[0]?.close || []).filter(c => c != null && c > 0);
+        const price  = meta.regularMarketPrice ?? closes[closes.length - 1];
+        const prev   = closes.length >= 2 ? closes[closes.length - 2] : (meta.chartPreviousClose ?? price);
+        const change    = price && prev ? +(price - prev).toFixed(0) : 0;
+        const changePct = prev && prev > 0 ? +((change / prev) * 100).toFixed(2) : 0;
+        if (price && price > 0) {
+          // 判斷是否在交易時段（台指期夜盤 15:00-05:00，日盤 08:45-13:45）
+          const hour = new Date().getUTCHours() + 8; // 台灣時間
+          const isOpen = (hour >= 15) || (hour < 5) || (hour >= 8 && hour < 14);
+          results['TW=F'] = {
+            price, change, changePct,
+            name: '台指期',
+            isYesterday: !isOpen,
+            source: 'Yahoo',
+            ok: true
+          };
         }
-      } catch(e2) { console.log('TXF error:', e2.message); }
-    }
-    if (txfData) {
-      const isOpen = txfData.lastPrice && (txfData.total?.tradeVolume ?? 0) > 0;
-      const price  = isOpen ? txfData.lastPrice : (txfData.closePrice ?? txfData.previousClose);
-      if (price && price > 0) {
-        results['TW=F'] = {
-          price,
-          change:      +(txfData.change ?? 0).toFixed(2),
-          changePct:   +(txfData.changePercent ?? 0).toFixed(2),
-          name:        '台指期',
-          isYesterday: !isOpen,
-          source:      'Fugle',
-          ok:          true
-        };
       }
     }
-
-    // 若盤中找不到（夜盤收盤後），用 previousClose
-    if (!results['TW=F']) {
-      for (const m of months) {
-        const symYr = (m < mo && mo === 11) ? String(now.getFullYear() + 1).slice(-1) : yr;
-        const sym = `TXF${monthCodes[m]}${symYr}`;
-        try {
-          const r2 = await fetch(
-            `https://api.fugle.tw/marketdata/v1.0/futopt/intraday/quote/${sym}`,
-            { headers: { 'X-API-KEY': FUGLE_KEY }, signal: AbortSignal.timeout(5000) }
-          );
-          if (!r2.ok) continue;
-          const d2 = await r2.json();
-          // 用 previousClose 作為昨收
-          const price2 = d2?.previousClose ?? d2?.closePrice;
-          if (price2 && price2 > 0) {
-            results['TW=F'] = {
-              price: price2,
-              change: 0, changePct: 0,
-              name: '台指期',
-              isYesterday: true,
-              source: 'Fugle',
-              ok: true
-            };
-            break;
-          }
-        } catch(e3) {}
-      }
-    }
-  } catch(e) {}
+  } catch(e) { console.log('TXF Yahoo error:', e.message); }
 
   // ── 3. 美股指數 + 台積電ADR via Yahoo Finance ─────────────────────
   const US_SYMBOLS = {
