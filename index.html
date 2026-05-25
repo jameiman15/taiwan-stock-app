@@ -1550,21 +1550,44 @@ function openAIDetail(code) {
           +'MA5：$'+(kl.ma5||'—')+' / MA20：$'+(kl.ma20||'—')+' / MA60：$'+(kl.ma60||'—')+'\n'
           +'RSI(14)：'+kl.rsi+'  成交量比：'+kl.volRatio+'x\n';
       }
-      return '你是台灣股市分析師，請用繁體中文分析以下推薦股票（直接給結論）：\n'
+      var _taiex = gP('TAIEX');
+      return '你是一位擁有50年實戰經驗的資深股票研究分析師，保守、理性、數據導向。\n'
+        +'請針對以下推薦股票撰寫完整投資分析報告（繁體中文，格式清晰適合手機閱讀）：\n\n'
+        +'【股票資訊】\n'
         +'股票：'+r.name+'（'+r.code+'）\n'
-        +'現價：'+(_rp?'$'+_rp.price.toFixed(2):'—')+'\n'
-        +'今日漲跌：'+(_rp?(_rp.changePct>=0?'+':'')+_rp.changePct.toFixed(2)+'%':'—')+'\n'
-        +'建議入場區：$'+r.entryLow+' ~ $'+r.entryHigh+' / 停損：$'+r.stop+'\n'
-        +'加權指數：'+(gP('TAIEX')?gP('TAIEX').price?.toLocaleString()+'點（'+(gP('TAIEX').changePct>=0?'+':'')+gP('TAIEX').changePct?.toFixed(2)+'%）':'—')+'\n'
+        +'現價：'+(_rp?'$'+_rp.price.toFixed(2):'—')
+        +'  今日：'+(_rp?(_rp.changePct>=0?'+':'')+_rp.changePct.toFixed(2)+'%':'—')+'\n'
+        +'建議入場：$'+r.entryLow+' ~ $'+r.entryHigh+'  停損：$'+r.stop+'\n'
+        +'大盤：'+(_taiex?_taiex.price?.toLocaleString()+'點（'+(_taiex.changePct>=0?'+':'')+_taiex.changePct?.toFixed(2)+'%）':'—')+'\n'
         + kStr
-        +'\n請分析：①K線技術面（均線位置、趨勢、RSI） ②現在是否在建議入場區 ③具體操作建議（立即買進/等待拉回/觀望）及理由。';
+        +'\n請依以下架構分析：\n\n'
+        +'【執行摘要】\n業務概述+投資論點（2-3句）+買入/持有/賣出結論+主要催化劑與風險\n\n'
+        +'【財務表現】\n近年營收成長+毛利率趨勢+EPS+FCF現金流狀況\n\n'
+        +'【估值分析】\n本益比/市淨率 vs 歷史均值與同業，高估/低估/合理定價\n\n'
+        +'【競爭護城河】\n核心業務+競爭優勢來源（品牌/專利/成本/網絡效應）+護城河耐久性\n\n'
+        +'【成長展望】\n主要成長催化劑+TAM市場機會+未來12個月展望\n\n'
+        +'【籌碼面】\n外資、投信、主力近期動向+內部人持股\n\n'
+        +'【技術面+K線】\n結合K線數據：均線多空排列+趨勢強弱+RSI+量價關係+支撐壓力位\n\n'
+        +'【風險分析】\n公司特有風險（3項）+系統性風險（3項）\n\n'
+        +'【關鍵技術訊號】\n根據以上完整分析，用固定格式輸出：\n'
+        +'轉強訊號：$XXX（中長線趨勢反轉確認點，說明原因）\n'
+        +'重要壓力：$XXX（目前最重要短線阻力，說明原因）\n'
+        +'多頭確認：$XXX（突破此價確認多頭走勢，說明原因）\n\n'
+        +'【最終建議】\n買入/持有/賣出評級+合理入場價+停損條件+目標價+主要風險提醒';
     }
 
     fetch('/api/kline?code='+r.code, {signal: AbortSignal.timeout(8000)})
       .then(function(res){ return res.json(); })
       .then(function(kl){
         if (recEl) callAI(buildRecPrompt(kl),
-          function(t){ recEl.innerHTML='<div style="font-size:13px;line-height:1.85">'+t.split('\n').join('<br>')+'</div>'; },
+          function(t){
+            var html = t.split('\n').join('<br>')
+              .replace(/【([^】]+)】/g,'<br><strong style="color:#6b21a8;font-size:11px;letter-spacing:.5px">【$1】</strong><br>')
+              .replace(/轉強訊號[：:][^$＄]*[$＄]([0-9,，.]+)/g, function(m,p){ return '<span style="background:#f0fdf4;color:#166534;border-radius:4px;padding:2px 8px;font-weight:700;display:inline-block;margin:1px">🟢 轉強訊號 $'+p.replace(/,|，/g,'')+'</span>'; })
+              .replace(/重要壓力[：:][^$＄]*[$＄]([0-9,，.]+)/g, function(m,p){ return '<span style="background:#fef2f2;color:#991b1b;border-radius:4px;padding:2px 8px;font-weight:700;display:inline-block;margin:1px">🔴 重要壓力 $'+p.replace(/,|，/g,'')+'</span>'; })
+              .replace(/多頭確認[：:][^$＄]*[$＄]([0-9,，.]+)/g, function(m,p){ return '<span style="background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:2px 8px;font-weight:700;display:inline-block;margin:1px">🔵 多頭確認 $'+p.replace(/,|，/g,'')+'</span>'; });
+            recEl.innerHTML='<div style="font-size:13px;line-height:1.85">'+html+'</div>';
+          },
           function(){ recEl.innerHTML='<span style="color:var(--text3)">分析載入失敗</span>'; }
         );
       })
