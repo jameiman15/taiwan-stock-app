@@ -1119,13 +1119,17 @@ function renderAI() {
       +'g=2（等待，5支）：entry<currentPrice，基本面優但現價偏高需等回測\n'
       +'【價格規則】\n'
       +'entry必須在currentPrice的±15%以內，stop必須是entry的88-95%\n'
-      +'【選股任務】請推薦10支台股標的，只回JSON陣列，格式如下：\n'
-      +'[{"g":1,"code":"2330","name":"台積電","entryPct":1.00,"stopPct":0.93,"score":95,"r":"CoWoS滿載外資持續買超本益比合理"},...]\n'
-      +'【規則】\n'
-      +'g=1（可進場5支）：現在就可分批買進，entryPct設0.98~1.02\n'
-      +'g=2（等待5支）：基本面好但偏高需等回測，entryPct設0.88~0.96\n'
-      +'entryPct/stopPct是相對現價的倍數，stopPct必須<entryPct\n'
-      +'code必須是真實台股代碼不可重複，只回JSON不要任何說明';
+      +'【選股任務】請根據以上四大面向分析，推薦10支台股標的，只回JSON陣列：\n'
+      +'[{"g":1,"code":"2330","name":"台積電","entry":2250,"stop":2100,"target":2600,"score":95,"basis":"基本面：CoWoS滿載EPS年增25%。技術面：站上季線量增。籌碼面：外資連10日買超。市場面：AI伺服器需求強勁。"},...]\n'
+      +'【欄位說明】\n'
+      +'g=1（可進場5支）：四大面向均偏多，entry設在當前合理買點（需考量均線支撐/技術壓力）\n'
+      +'g=2（等待5支）：基本面佳但技術面偏高，entry設在合理回測買點\n'
+      +'entry：建議入場價（真實台股股價，必須合理，參考均線/支撐位）\n'
+      +'stop：停損價（低於entry 7-12%，設在技術支撐破位點）\n'
+      +'target：目標價（上漲空間15-30%）\n'
+      +'basis：四大面向分析摘要（每個面向1句）\n'
+      +'code必須是真實台股代碼不可重複，name與code完全對應\n'
+      +'只回JSON陣列，不要其他任何文字';
 
     callAI(rPrompt, function(text) {
       try {
@@ -1149,30 +1153,44 @@ function renderAI() {
           var p = gP(r.code);
           var cp = p ? p.price : null;
           var sc = r.score>=80?'#16a34a':r.score>=65?'#d97706':'#888';
-          // 用現價 × entryPct 計算建議入場價，確保合理
-          var entryPrice = cp && r.entryPct ? Math.round(cp * r.entryPct) : (r.entry || null);
-          var stopPrice  = cp && r.stopPct  ? Math.round(cp * r.stopPct)  : (r.stop  || null);
-          // g=1 且入場價高於現價 → 修正為現價（表示現在就能進場）
-          if (r.g===1 && cp && entryPrice > cp) entryPrice = Math.round(cp);
-          var pi = cp
-            ? ('現價 <b>$'+fmtN(cp)+'</b> · 建議入場 $'+fmtN(entryPrice)+' · 停損 $'+fmtN(stopPrice))
-            : ('建議入場約現價×'+(r.entryPct||0.98)+' · 停損約現價×'+(r.stopPct||0.93));
+
+          // 驗證 AI 給的入場價合理性（必須在現價 70%~130% 以內）
+          var entry = r.entry || 0;
+          var stop  = r.stop  || 0;
+          var target= r.target|| 0;
+          if (cp && entry > 0) {
+            if (entry > cp * 1.30) entry = Math.round(cp * 1.00); // 入場價過高修正
+            if (entry < cp * 0.70) entry = Math.round(cp * 0.95); // 入場價過低修正
+            if (stop > entry) stop = Math.round(entry * 0.92);     // 停損必須低於入場
+            if (target < entry) target = Math.round(entry * 1.20); // 目標必須高於入場
+          }
+
+          var priceRow = cp
+            ? ('現價 <b style="color:var(--text)">$'+fmtN(cp)+'</b>'
+              +' &nbsp;入場 <b style="color:#1d4ed8">$'+fmtN(entry)+'</b>'
+              +' &nbsp;停損 <b style="color:var(--up)">$'+fmtN(stop)+'</b>'
+              +' &nbsp;目標 <b style="color:var(--dn)">$'+fmtN(target)+'</b>')
+            : ('入場 <b>$'+fmtN(entry)+'</b> &nbsp;停損 <b>$'+fmtN(stop)+'</b> &nbsp;目標 <b>$'+fmtN(target)+'</b>');
+
           var el = document.createElement('div');
           el.className='card cp';
-          el.style.cssText='margin-bottom:8px;cursor:pointer';
-          el.innerHTML='<div class="sr"><div class="sl">'
-            +'<h3>'+r.name+' <span style="font-size:11px;color:var(--text3)">'+r.code+'</span></h3>'
-            +'<div class="meta" style="margin-top:4px">'+pi+'</div>'
-            +'</div><div class="sr-r"><div style="font-size:24px;font-weight:700;font-family:monospace;color:'+sc+'">'+r.score+'</div>'
-            +'<div style="font-size:10px;color:var(--text3)">評分</div></div></div>'
-            +'<div style="font-size:12px;color:var(--text2);margin-top:6px;line-height:1.6">'+r.r+'</div>';
+          el.style.cssText='margin-bottom:8px;cursor:pointer;border-left:3px solid '+sc;
+          el.innerHTML='<div class="sr"><div class="sl" style="flex:1;min-width:0">'
+            +'<h3 style="margin-bottom:4px">'+r.name+' <span style="font-size:11px;font-weight:400;color:var(--text3)">'+r.code+'</span></h3>'
+            +'<div style="font-size:11px;color:var(--text2);line-height:1.5;margin-bottom:4px">'+priceRow+'</div>'
+            +'</div>'
+            +'<div style="text-align:right;flex-shrink:0;margin-left:8px">'
+            +'<div style="font-size:26px;font-weight:700;font-family:monospace;color:'+sc+'">'+r.score+'</div>'
+            +'<div style="font-size:10px;color:var(--text3)">評分</div>'
+            +'</div></div>'
+            +(r.basis ? '<div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.7;border-top:1px solid var(--border);padding-top:6px">'+r.basis+'</div>' : '')
+            +(r.r && !r.basis ? '<div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.6">'+r.r+'</div>' : '');
           el.onclick = (function(rec, ep, sp) { return function() {
             var existing = AI_RECS.find(function(x){return x.code===rec.code;});
             if (!existing) AI_RECS.push({code:rec.code,name:rec.name,score:rec.score,a:'buy',
-              entryLow:ep*0.98, entryHigh:ep*1.02, stop:sp,
-              tech:'', fund:'', chip:'', r:rec.r});
+              entryLow:ep*0.98, entryHigh:ep*1.02, stop:sp, tech:'', fund:'', chip:'', r:rec.r||rec.basis||''});
             openAIDetail(rec.code);
-          }; })(r, entryPrice||0, stopPrice||0);
+          }; })(r, entry, stop);
           return el;
         }
 
