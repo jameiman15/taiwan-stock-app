@@ -1128,12 +1128,15 @@ function renderAI() {
       +'【選股任務】請根據以上四大面向分析，推薦10支台股標的，只回JSON陣列：\n'
       +'[{"g":1,"code":"2330","name":"台積電","entry":2250,"stop":2100,"target":2600,"score":95,"basis":"基本面：CoWoS滿載EPS年增25%。技術面：站上季線量增。籌碼面：外資連10日買超。市場面：AI伺服器需求強勁。"},...]\n'
       +'【欄位說明】\n'
-      +'g=1（可進場5支）：四大面向均偏多，entry設在當前合理買點（需考量均線支撐/技術壓力）\n'
-      +'g=2（等待5支）：基本面佳但技術面偏高，entry設在合理回測買點\n'
-      +'entry：建議入場價（真實台股股價，必須合理，參考均線/支撐位）\n'
+      +'g=1（可進場5支）：四大面向均偏多，entry設在當前合理買點\n'
+      +'g=2（等待5支）：基本面佳但技術偏高，entry設在合理回測買點\n'
+      +'entry：建議入場價（參考均線支撐位，必須合理）\n'
       +'stop：停損價（低於entry 7-12%，設在技術支撐破位點）\n'
       +'target：目標價（上漲空間15-30%）\n'
-      +'basis：四大面向分析摘要（每個面向1句）\n'
+      +'signal：中長線轉強訊號出現的價格（突破此價確認趨勢反轉，通常是季線或年線）\n'
+      +'resist：目前最重要的壓力區價格（短期上漲阻力，通常是前高或均線壓力）\n'
+      +'breakout：突破此價確認多頭趨勢（通常是前高整理區或年線）\n'
+      +'basis：四大面向分析摘要（基本面/技術面/籌碼面/市場面各1句）\n'
       +'code必須是真實台股代碼不可重複，name與code完全對應\n'
       +'只回JSON陣列，不要其他任何文字';
 
@@ -1190,7 +1193,12 @@ function renderAI() {
             +'<div style="font-size:10px;color:var(--text3)">評分</div>'
             +'</div></div>'
             +(r.basis ? '<div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.7;border-top:1px solid var(--border);padding-top:6px">'+r.basis+'</div>' : '')
-            +(r.r && !r.basis ? '<div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.6">'+r.r+'</div>' : '');
+            +(r.r && !r.basis ? '<div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.6">'+r.r+'</div>' : '')
+            +((r.signal||r.resist||r.breakout) ? '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:8px;font-size:10px">'
+              +(r.signal   ? '<div style="background:#f0fdf4;border-radius:6px;padding:4px 6px;text-align:center"><div style="color:#166534;font-weight:700">轉強訊號</div><div style="color:var(--text);font-weight:600">$'+fmtN(r.signal)+'</div></div>' : '')
+              +(r.resist   ? '<div style="background:#fef2f2;border-radius:6px;padding:4px 6px;text-align:center"><div style="color:#991b1b;font-weight:700">重要壓力</div><div style="color:var(--text);font-weight:600">$'+fmtN(r.resist)+'</div></div>' : '')
+              +(r.breakout ? '<div style="background:#eff6ff;border-radius:6px;padding:4px 6px;text-align:center"><div style="color:#1d4ed8;font-weight:700">多頭突破</div><div style="color:var(--text);font-weight:600">$'+fmtN(r.breakout)+'</div></div>' : '')
+              +'</div>' : '');
           el.onclick = (function(rec, ep, sp) { return function() {
             var existing = AI_RECS.find(function(x){return x.code===rec.code;});
             if (!existing) AI_RECS.push({code:rec.code,name:rec.name,score:rec.score,a:'buy',
@@ -1424,8 +1432,9 @@ function openDetail(code) {
           +'【競爭護城河】核心競爭優勢\n'
           +'【籌碼面】外資投信動向+主力態度\n'
           +'【技術面+K線】結合K線均線位置趨勢RSI量價\n'
+          +'【關鍵技術訊號】需明確說明三個價格：①中長線轉強訊號出現的價格（突破哪條均線/前高確認趨勢）②目前最重要的壓力區（短線阻力點）③突破哪個價位確認多頭趨勢\n'
           +'【主要風險】公司特有+系統性風險\n'
-          +'【最終建議】買入/持有/賣出評級+合理入場價+停損點+目標價'
+          +'【最終建議】買入/持有/賣出評級+合理入場價+停損點+目標價，並明確列出：轉強訊號價 $XXX、壓力區 $XXX、多頭確認價 $XXX'
       );
     }
 
@@ -1434,7 +1443,11 @@ function openDetail(code) {
         function(text){
           var el=document.getElementById('diag-result');
           if(!el)return;
-          el.innerHTML=text.split('\n').join('<br>').replace(/【([^】]+)】/g,'<br><strong style="color:#6b21a8;font-size:11px">【$1】</strong><br>');
+          el.innerHTML=text.split('\n').join('<br>')
+        .replace(/【([^】]+)】/g,'<br><strong style="color:#6b21a8;font-size:11px;letter-spacing:.5px">【$1】</strong><br>')
+        .replace(/轉強訊號[^$]*\$([0-9,]+)/g,'<span style="background:#f0fdf4;color:#166534;border-radius:4px;padding:1px 6px;font-weight:700">轉強訊號 $$1</span>')
+        .replace(/壓力區?[^$]*\$([0-9,]+)/g,'<span style="background:#fef2f2;color:#991b1b;border-radius:4px;padding:1px 6px;font-weight:700">壓力區 $$1</span>')
+        .replace(/多頭[確突][認破][^$]*\$([0-9,]+)/g,'<span style="background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:1px 6px;font-weight:700">多頭確認 $$1</span>');
         },
         function(){
           var el=document.getElementById('diag-result');
