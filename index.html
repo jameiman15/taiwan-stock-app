@@ -1092,12 +1092,18 @@ function renderAI() {
     if (titleEl) titleEl.textContent = '📊 AI 今日選股 · '+today;
 
     var _t=gP('TAIEX'),_s=gP('^SOX'),_s5=gP('^GSPC'),_tmc=gP('2330');
+    // 收集所有已知股票現價提供給 AI 參考
+    var knownPrices = Object.entries(S.prices||{})
+      .filter(function(kv){ return kv[1] && kv[1].price && kv[0].match(/^\d{4,6}$/); })
+      .map(function(kv){ return kv[0]+'=$'+kv[1].price.toFixed(0); })
+      .slice(0,30).join(' ');
     var rPrompt = '你是一位資深台灣股市基金經理人，勝率長期高於90%。今天是'+today+'。\n'
       +'今日市場數據：\n'
       +'加權指數：'+(_t?_t.price?.toLocaleString()+'點（'+(_t.changePct>=0?'+':'')+_t.changePct?.toFixed(2)+'%）':'—')+'\n'
       +'費城半導體：'+(_s?(_s.changePct>=0?'+':'')+_s.changePct?.toFixed(2)+'%':'—')+'\n'
       +'S&P500：'+(_s5?(_s5.changePct>=0?'+':'')+_s5.changePct?.toFixed(2)+'%':'—')+'\n'
-      +'台積電：'+(_tmc?'$'+_tmc.price?.toFixed(0)+'（'+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%）':'—')+'\n\n'
+      +'台積電：'+(_tmc?'$'+_tmc.price?.toFixed(0)+'（'+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%）':'—')+'\n'
+      +(knownPrices?'已知個股現價（請以此為準）：'+knownPrices+'\n':'')+'\n'
       +'請以下列專業框架選出10支台股標的：\n'
       +'【分析框架】\n'
       +'1. 商業模式與護城河：產品/服務是否具競爭優勢\n'
@@ -1235,11 +1241,14 @@ function renderAI() {
           if (si < 0) return;
           var el = document.getElementById('diag-text-'+si);
           if (el) el.innerHTML = '<b>'+item.action+'</b> — '+item.reason;
+          // 同步更新標籤（AI分析頁和持倉頁）
+          var am = {'加倉':'add','續抱':'hold','觀察':'watch','減碼':'sell','停損':'stop'};
+          var actKey = am[item.action]||'hold';
           var tagEl = document.getElementById('diag-tag-'+si);
-          if (tagEl) {
-            var am = {'加倉':'add','續抱':'hold','觀察':'watch','減碼':'sell','停損':'stop'};
-            tagEl.innerHTML = tagH(am[item.action]||'hold');
-          }
+          if (tagEl) tagEl.innerHTML = tagH(actKey);
+          // 同時更新持倉頁的標籤（如果有的話）
+          var pfTag = document.getElementById('pf-tag-'+item.code);
+          if (pfTag) pfTag.innerHTML = tagH(actKey);
         });
       } catch(e2) {
         _stocks.forEach(function(s,si) {
@@ -1406,7 +1415,18 @@ function openDetail(code) {
         +'加權指數：'+(_tD?_tD.price?.toLocaleString()+'點（'+(_tD.changePct>=0?'+':'')+_tD.changePct?.toFixed(2)+'%）':'—')+'\n'
         +'費半：'+(_sD?(_sD.changePct>=0?'+':'')+_sD.changePct?.toFixed(2)+'%':'—')+'\n'
         + kStr
-        +'\n請依格式分析（每項2句以內）：\n【技術面+K線】請結合以上K線數據分析均線多空、趨勢強弱、支撐壓力\n【基本面】\n【籌碼面】\n【外資動向】\n【風險評估】\n【操作建議】根據K線給出具體建議（加倉/續抱/觀察/減碼/停損）及目標價或停損點';
+        +(s.type==='etf'
+        ? '\n請分析：【執行摘要】買入/持有/賣出 【財務表現】追蹤指數與殖利率 【估值】是否合理 【風險】主要風險 【操作建議】明確建議含目標價停損點'
+        : '\n請依以下架構分析（每項2-3句，結合K線數據）：\n'
+          +'【執行摘要】業務概述+投資論點+買入/持有/賣出+主要催化劑\n'
+          +'【財務表現】近年營收成長+毛利率趨勢+EPS+現金流\n'
+          +'【估值分析】本益比/PBR vs歷史均值，高估/低估/合理\n'
+          +'【競爭護城河】核心競爭優勢\n'
+          +'【籌碼面】外資投信動向+主力態度\n'
+          +'【技術面+K線】結合K線均線位置趨勢RSI量價\n'
+          +'【主要風險】公司特有+系統性風險\n'
+          +'【最終建議】買入/持有/賣出評級+合理入場價+停損點+目標價'
+      );
     }
 
     function runDiag(kl) {
