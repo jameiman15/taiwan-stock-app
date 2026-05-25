@@ -335,19 +335,52 @@ let PF = (() => {
 })();
 
 // ─── Gemini AI proxy ────────────────────────────────────────
-async function callAI(prompt, onResult, onError) {
+// ─── AI 請求排隊（避免同時太多請求打爆 Groq）──────────────
+const _aiQueue = [];
+let _aiRunning = 0;
+const _AI_CONCURRENCY = 2; // 最多同時 2 個請求
+
+function callAI(prompt, onResult, onError) {
+  _aiQueue.push({ prompt, onResult, onError });
+  _processAIQueue();
+}
+
+function _processAIQueue() {
+  while (_aiRunning < _AI_CONCURRENCY && _aiQueue.length > 0) {
+    const task = _aiQueue.shift();
+    _aiRunning++;
+    _callAISingle(task.prompt, task.onResult, task.onError).finally(function() {
+      _aiRunning--;
+      _processAIQueue();
+    });
+  }
+}
+
+async function _callAISingle(prompt, onResult, onError, retries) {
+  retries = retries || 0;
   try {
     const r = await fetch('/api/claude', {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({prompt}),
       signal: AbortSignal.timeout(25000),
     });
+    if (r.status === 429 && retries < 3) {
+      // Rate limit - 等待後重試
+      await new Promise(function(res){ setTimeout(res, 2000 * (retries + 1)); });
+      return _callAISingle(prompt, onResult, onError, retries + 1);
+    }
     if (!r.ok) { console.error('callAI HTTP', r.status); onError && onError(); return; }
     const d = await r.json();
-    console.log('callAI response:', d);
     if (d.ok && d.text) { onResult(d.text); }
     else { console.error('callAI no text:', d); onError && onError(); }
-  } catch(e) { console.error('callAI error:', e); onError && onError(); }
+  } catch(e) {
+    if (retries < 2) {
+      await new Promise(function(res){ setTimeout(res, 1500); });
+      return _callAISingle(prompt, onResult, onError, retries + 1);
+    }
+    console.error('callAI error:', e);
+    onError && onError();
+  }
 }
 
 function savePF() {
@@ -952,21 +985,7 @@ function renderAI() {
         var inZone = recs.filter(function(r){return r.g===1;});
         var waiting = recs.filter(function(r){return r.g===2;});
 
-        // 把推薦股代碼加入股價查詢（如果還沒有現價）
-        var recCodes = recs.map(function(r){return r.code;}).filter(function(c){return !gP(c);});
-        if (recCodes.length > 0) {
-          fetch('/api/prices?codes='+recCodes.join(','), {signal: AbortSignal.timeout(10000)})
-            .then(function(res){return res.json();})
-            .then(function(d){
-              if (d.data) Object.assign(S.prices, d.data);
-              // 重新渲染卡片顯示現價
-              var izEl=document.getElementById('recs-in-zone');
-              var wzEl=document.getElementById('recs-wait-zone');
-              izEl.innerHTML=''; wzEl.innerHTML='';
-              if(inZone.length) inZone.forEach(function(r){izEl.appendChild(makeCard(r));});
-              if(waiting.length) waiting.forEach(function(r){wzEl.appendChild(makeCard(r));});
-            }).catch(function(){});
-        }
+        // 使用進入網站時的現價，不另外抓取
 
         function makeCard(r) {
           var p = gP(r.code);
@@ -1012,44 +1031,49 @@ function renderAI() {
     });
   })();
 
-  // AI 批次健診所有持倉
+  // AI 批次健診：一次送所有持倉，只用一個請求節省 rate limit
   const _taiexAI = gP('TAIEX'), _soxAI = gP('^SOX');
-  (acc.stocks||[]).forEach(function(s, si) {
-    const p = gP(s.code);
-    const _roi2 = p ? ((p.price - s.cost) / s.cost * 100) : 0;
-    const pnl2 = p ? Math.round((p.price - s.cost) * s.qty) : 0;
-    const diagPrompt2 = '你是資深台灣股市經理人，勝率90%以上。請用繁體中文對以下持股做快速健診（直接給結論，不超過3句）：\n'
-      +'股票：'+s.name+'（'+s.code+'）\n'
-      +'類型：'+(s.type==='stock'?'個股':'ETF')+'\n'
-      +'持有成本：$'+s.cost+' / 持有損益：'+((_roi2>=0?'+':'')+_roi2.toFixed(1))+'%（'+((pnl2>=0?'+':'')+'NT$'+Math.abs(pnl2).toLocaleString())+'）\n'
-      +'今日漲跌：'+(p?((p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%'):'—')+'\n'
-      +'加權指數：'+(_taiexAI?(_taiexAI.changePct>=0?'+':'')+_taiexAI.changePct.toFixed(2)+'%':'—')+'\n'
-      +'費半：'+(_soxAI?(_soxAI.changePct>=0?'+':'')+_soxAI.changePct.toFixed(2)+'%':'—')+'\n\n'
-      +'請從三面向快速評估並給出操作建議：\n'
-      +'① 基本面：商業模式護城河、毛利率趨勢、EPS成長\n'
-      +'② 技術面：均線位置、趨勢強弱、量價關係\n'
-      +'③ 籌碼面：外資投信動向\n'
-      +'最後給明確操作建議（加倉/續抱/觀察/減碼/停損）及理由，含目標價或停損點。';
-    callAI(diagPrompt2, function(text) {
-      var el = document.getElementById('diag-text-'+si);
-      if (el) el.innerHTML = text.split('\n').join('<br>');
-      // 根據 AI 結論更新標籤
-      var tagEl = document.getElementById('diag-tag-'+si);
-      if (tagEl) {
-        var lowerText = text.toLowerCase();
-        var newAction = 'hold';
-        if (text.includes('停損') || text.includes('出場') || text.includes('賣出')) newAction = 'sell';
-        else if (text.includes('加倉') || text.includes('加碼') || text.includes('買進')) newAction = 'add';
-        else if (text.includes('觀察') || text.includes('觀望')) newAction = 'watch';
-        else if (text.includes('續抱') || text.includes('持有') || text.includes('維持')) newAction = 'hold';
-        else if (text.includes('減碼') || text.includes('獲利了結')) newAction = 'sell';
-        tagEl.innerHTML = tagH(newAction);
+  const _stocks = acc.stocks || [];
+  if (_stocks.length > 0) {
+    var stockSummary = _stocks.map(function(s,i) {
+      var p = gP(s.code);
+      var roi = p ? ((p.price-s.cost)/s.cost*100).toFixed(1) : '?';
+      var chg = p ? (p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%' : '—';
+      return (i+1)+'. '+s.name+'('+s.code+') 損益'+roi+'% 今日'+chg;
+    }).join('\n');
+    var batchPrompt = '你是資深台灣股市經理人。今日大盤：加權'+(_taiexAI?(_taiexAI.changePct>=0?'+':'')+_taiexAI.changePct.toFixed(2)+'%':'—')+' 費半'+(_soxAI?(_soxAI.changePct>=0?'+':'')+_soxAI.changePct.toFixed(2)+'%':'—')+'\n\n'
+      +'持倉清單：\n'+stockSummary+'\n\n'
+      +'請對每支股票給出健診，回覆JSON陣列（只回JSON，不要其他文字）：\n'
+      +'[{"code":"代碼","action":"加倉/續抱/觀察/減碼/停損","reason":"理由一句話含基本面或技術面判斷"}]';
+    callAI(batchPrompt, function(text) {
+      try {
+        var clean = text.replace(/```json|```/g,'').trim();
+        var diagResults = JSON.parse(clean);
+        if (!Array.isArray(diagResults)) throw new Error('not array');
+        diagResults.forEach(function(item) {
+          var si = _stocks.findIndex(function(s){return s.code===item.code;});
+          if (si < 0) return;
+          var el = document.getElementById('diag-text-'+si);
+          if (el) el.innerHTML = '<b>'+item.action+'</b> — '+item.reason;
+          var tagEl = document.getElementById('diag-tag-'+si);
+          if (tagEl) {
+            var am = {'加倉':'add','續抱':'hold','觀察':'watch','減碼':'sell','停損':'stop'};
+            tagEl.innerHTML = tagH(am[item.action]||'hold');
+          }
+        });
+      } catch(e2) {
+        _stocks.forEach(function(s,si) {
+          var el = document.getElementById('diag-text-'+si);
+          if (el) el.innerHTML = '<span style="color:var(--text3)">解析失敗</span>';
+        });
       }
     }, function() {
-      var el = document.getElementById('diag-text-'+si);
-      if (el) el.innerHTML = '<span style="color:var(--text3)">分析失敗</span>';
+      _stocks.forEach(function(s,si) {
+        var el = document.getElementById('diag-text-'+si);
+        if (el) el.innerHTML = '<span style="color:var(--text3)">健診失敗，稍後重試</span>';
+      });
     });
-  });
+  }
 }
 
 async function renderNews() {
