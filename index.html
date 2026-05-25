@@ -770,6 +770,60 @@ function renderPortfolio() {
     <div style="height:20px"></div>`;
 }
 
+function runBatchDiag() {
+  const btn = document.getElementById('diag-btn');
+  if (btn) { btn.textContent = '⏳ 分析中...'; btn.disabled = true; }
+
+  const acc = PF[S.acct] || {stocks:[]};
+  const _stocks = acc.stocks || [];
+  if (_stocks.length === 0) return;
+
+  const _taiexAI = gP('TAIEX'), _soxAI = gP('^SOX');
+  var stockSummary = _stocks.map(function(s,i) {
+    var p = gP(s.code);
+    var roi = p ? ((p.price-s.cost)/s.cost*100).toFixed(1) : '?';
+    var chg = p ? (p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%' : '—';
+    return (i+1)+'. '+s.name+'('+s.code+') 損益'+roi+'% 今日'+chg;
+  }).join('\n');
+
+  var batchPrompt = '你是資深台灣股市經理人。今日大盤：加權'+(_taiexAI?(_taiexAI.changePct>=0?'+':'')+_taiexAI.changePct.toFixed(2)+'%':'—')+' 費半'+(_soxAI?(_soxAI.changePct>=0?'+':'')+_soxAI.changePct.toFixed(2)+'%':'—')+'\n\n'
+    +'持倉清單：\n'+stockSummary+'\n\n'
+    +'請對每支股票給出健診，回覆JSON陣列（只回JSON，不要其他文字）：\n'
+    +'[{"code":"代碼","action":"加倉/續抱/觀察/減碼/停損","reason":"理由一句話含基本面或技術面判斷"}]';
+
+  callAI(batchPrompt, function(text) {
+    try {
+      var clean = text.replace(/```json|```/g,'').trim();
+      var diagResults = JSON.parse(clean);
+      if (!Array.isArray(diagResults)) throw new Error('not array');
+      diagResults.forEach(function(item) {
+        var si = _stocks.findIndex(function(s){return s.code===item.code;});
+        if (si < 0) return;
+        var el = document.getElementById('diag-text-'+si);
+        if (el) el.innerHTML = '<b>'+item.action+'</b> — '+item.reason;
+        var tagEl = document.getElementById('diag-tag-'+si);
+        if (tagEl) {
+          var am = {'加倉':'add','續抱':'hold','觀察':'watch','減碼':'sell','停損':'stop'};
+          tagEl.innerHTML = tagH(am[item.action]||'hold');
+        }
+      });
+      if (btn) { btn.textContent = '✅ 健診完成'; btn.disabled = false; }
+    } catch(e2) {
+      _stocks.forEach(function(s,si) {
+        var el = document.getElementById('diag-text-'+si);
+        if (el) el.innerHTML = '<span style="color:var(--text3)">解析失敗，請重試</span>';
+      });
+      if (btn) { btn.textContent = '🔄 重新健診'; btn.disabled = false; }
+    }
+  }, function() {
+    _stocks.forEach(function(s,si) {
+      var el = document.getElementById('diag-text-'+si);
+      if (el) el.innerHTML = '<span style="color:var(--text3)">健診失敗，請稍後重試</span>';
+    });
+    if (btn) { btn.textContent = '🔄 重新健診'; btn.disabled = false; }
+  });
+}
+
 function renderAI() {
   const acc = PF[S.acct] || {stocks:[],funds:[]};
   const now = new Date();
@@ -917,7 +971,12 @@ function renderAI() {
       </div>
     </div>
 
-    <div class="st" style="margin-top:8px">持倉健診</div>
+    <div class="st" style="margin-top:8px">持倉健診
+      <button onclick="runBatchDiag()" id="diag-btn"
+        style="font-size:11px;background:var(--text);color:#fff;border:none;border-radius:8px;padding:4px 10px;cursor:pointer;font-family:inherit;font-weight:600">
+        🤖 AI 健診
+      </button>
+    </div>
     ${(acc.stocks||[]).map((s,si)=>{
       const p = gP(s.code);
       const _roi2 = p ? ((p.price - s.cost) / s.cost * 100) : 0;
@@ -934,7 +993,7 @@ function renderAI() {
           <div class="sr-r"><div class="price">${p?'$'+fmtN(p.price):'---'}</div></div>
         </div>
         <div id="diag-text-${si}" style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.7">
-          <span style="color:var(--text3)">⏳ AI 分析中...</span>
+          <span style="color:var(--text3);font-size:11px">尚未分析</span>
         </div>
       </div>`;
     }).join('')}
@@ -1031,10 +1090,8 @@ function renderAI() {
     });
   })();
 
-  // AI 批次健診：一次送所有持倉，只用一個請求節省 rate limit
-  const _taiexAI = gP('TAIEX'), _soxAI = gP('^SOX');
-  const _stocks = acc.stocks || [];
-  if (_stocks.length > 0) {
+  // 持倉健診改為手動觸發（點「AI 健診」按鈕），見 runBatchDiag()
+  if (false) {
     var stockSummary = _stocks.map(function(s,i) {
       var p = gP(s.code);
       var roi = p ? ((p.price-s.cost)/s.cost*100).toFixed(1) : '?';
