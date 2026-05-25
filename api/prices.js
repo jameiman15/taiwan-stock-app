@@ -113,6 +113,35 @@ export default async function handler(req, res) {
         };
       }
     }
+
+    // 若盤中找不到（夜盤收盤後），用 previousClose
+    if (!results['TW=F']) {
+      for (const m of months) {
+        const symYr = (m < mo && mo === 11) ? String(now.getFullYear() + 1).slice(-1) : yr;
+        const sym = `TXF${monthCodes[m]}${symYr}`;
+        try {
+          const r2 = await fetch(
+            `https://api.fugle.tw/marketdata/v1.0/futopt/intraday/quote/${sym}`,
+            { headers: { 'X-API-KEY': FUGLE_KEY }, signal: AbortSignal.timeout(5000) }
+          );
+          if (!r2.ok) continue;
+          const d2 = await r2.json();
+          // 用 previousClose 作為昨收
+          const price2 = d2?.previousClose ?? d2?.closePrice;
+          if (price2 && price2 > 0) {
+            results['TW=F'] = {
+              price: price2,
+              change: 0, changePct: 0,
+              name: '台指期',
+              isYesterday: true,
+              source: 'Fugle',
+              ok: true
+            };
+            break;
+          }
+        } catch(e3) {}
+      }
+    }
   } catch(e) {}
 
   // ── 3. 美股指數 + 台積電ADR via Yahoo Finance ─────────────────────
