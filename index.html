@@ -1424,17 +1424,34 @@ function openDetail(code) {
         +'費半：'+(_sD?(_sD.changePct>=0?'+':'')+_sD.changePct?.toFixed(2)+'%':'—')+'\n'
         + kStr
         +(s.type==='etf'
-        ? '\n請分析：【執行摘要】買入/持有/賣出 【財務表現】追蹤指數與殖利率 【估值】是否合理 【風險】主要風險 【操作建議】明確建議含目標價停損點'
-        : '\n請依以下架構分析（每項2-3句，結合K線數據）：\n'
-          +'【執行摘要】業務概述+投資論點+買入/持有/賣出+主要催化劑\n'
-          +'【財務表現】近年營收成長+毛利率趨勢+EPS+現金流\n'
-          +'【估值分析】本益比/PBR vs歷史均值，高估/低估/合理\n'
-          +'【競爭護城河】核心競爭優勢\n'
-          +'【籌碼面】外資投信動向+主力態度\n'
-          +'【技術面+K線】結合K線均線位置趨勢RSI量價\n'
-          +'【關鍵技術訊號】需明確說明三個價格：①中長線轉強訊號出現的價格（突破哪條均線/前高確認趨勢）②目前最重要的壓力區（短線阻力點）③突破哪個價位確認多頭趨勢\n'
-          +'【主要風險】公司特有+系統性風險\n'
-          +'【最終建議】買入/持有/賣出評級+合理入場價+停損點+目標價，並明確列出：轉強訊號價 $XXX、壓力區 $XXX、多頭確認價 $XXX'
+        ? '\n請分析：【執行摘要】買入/持有/賣出 【財務表現】追蹤指數與殖利率 【估值】是否合理 【風險】主要風險 【操作建議】明確建議含目標價停損點\n\n'
+          +'最後請用固定格式輸出技術訊號：\n轉強訊號：$XXX（說明）\n重要壓力：$XXX（說明）\n多頭確認：$XXX（說明）'
+        : '\n你的任務是撰寫一份綜合投資分析報告，保守、理性、數據導向，結合以下K線技術數據：\n'
+          + kStr
+          +'\n請依以下架構分析（每項2-3句）：\n\n'
+          +'【執行摘要】\n'
+          +'簡述公司業務。陳述整體投資論點（2-3句）。以目前估值給出買入/持有/賣出結論。總結主要催化劑與風險。\n\n'
+          +'【財務表現與健康狀況】\n'
+          +'損益表：近5年營收成長、毛利率、營業利潤率趨勢。資產負債表：債務水平、現金狀況是否強健。現金流：FCF是否持續為正。\n\n'
+          +'【估值分析】\n'
+          +'比較本益比、市銷率、市淨率與5年歷史均值及同業。結論：高估/低估/合理定價。\n\n'
+          +'【商業模式與競爭護城河】\n'
+          +'核心業務部門及收入貢獻。競爭優勢來源（品牌/專利/網絡效應/成本領先）。護城河耐久性評估。\n\n'
+          +'【成長策略與未來展望】\n'
+          +'主要成長催化劑。TAM市場機會與市佔潛力。\n\n'
+          +'【籌碼面】\n'
+          +'外資、投信、主力近期動向。內部人持股水平。\n\n'
+          +'【技術面+K線分析】\n'
+          +'結合上方K線數據：均線多空排列、趨勢強弱、RSI超買超賣、量價關係、支撐壓力位。\n\n'
+          +'【風險分析】\n'
+          +'公司特有風險（前3大）。系統性風險（前3大外部風險）。\n\n'
+          +'【關鍵技術訊號】\n'
+          +'根據以上完整分析，必須用以下固定格式輸出三個關鍵價格：\n'
+          +'轉強訊號：$XXX（中長線趨勢反轉確認點，說明原因）\n'
+          +'重要壓力：$XXX（目前最重要短線阻力區，說明原因）\n'
+          +'多頭確認：$XXX（突破此價確認多頭走勢，說明原因）\n\n'
+          +'【最終建議】\n'
+          +'綜合以上所有分析給出買入/持有/賣出評級。合理入場價（參考估值與技術面）。停損條件（設在技術支撐破位點）。目標價（基於成長動能與估值修復）。主要風險提醒。'
       );
     }
 
@@ -1445,9 +1462,9 @@ function openDetail(code) {
           if(!el)return;
           el.innerHTML=text.split('\n').join('<br>')
         .replace(/【([^】]+)】/g,'<br><strong style="color:#6b21a8;font-size:11px;letter-spacing:.5px">【$1】</strong><br>')
-        .replace(/轉強訊號[^$]*\$([0-9,]+)/g,'<span style="background:#f0fdf4;color:#166534;border-radius:4px;padding:1px 6px;font-weight:700">轉強訊號 $$1</span>')
-        .replace(/壓力區?[^$]*\$([0-9,]+)/g,'<span style="background:#fef2f2;color:#991b1b;border-radius:4px;padding:1px 6px;font-weight:700">壓力區 $$1</span>')
-        .replace(/多頭[確突][認破][^$]*\$([0-9,]+)/g,'<span style="background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:1px 6px;font-weight:700">多頭確認 $$1</span>');
+        .replace(/轉強訊號[：:][^$＄]*[$＄]([0-9,，.]+)/g, function(m,p){ return '<span style="background:#f0fdf4;color:#166534;border-radius:4px;padding:2px 8px;font-weight:700;display:inline-block;margin:1px">🟢 轉強訊號 $'+p.replace(/,|，/g,'')+'</span>'; })
+        .replace(/重要壓力[：:][^$＄]*[$＄]([0-9,，.]+)/g, function(m,p){ return '<span style="background:#fef2f2;color:#991b1b;border-radius:4px;padding:2px 8px;font-weight:700;display:inline-block;margin:1px">🔴 重要壓力 $'+p.replace(/,|，/g,'')+'</span>'; })
+        .replace(/多頭確認[：:][^$＄]*[$＄]([0-9,，.]+)/g, function(m,p){ return '<span style="background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:2px 8px;font-weight:700;display:inline-block;margin:1px">🔵 多頭確認 $'+p.replace(/,|，/g,'')+'</span>'; });
         },
         function(){
           var el=document.getElementById('diag-result');
