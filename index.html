@@ -578,7 +578,7 @@ function renderHome() {
       ${idx('台指期夜盤',txf,'TXF')}
     </div>
     <div class="op-card">
-      <div class="op-lbl">🌅 明日開盤建議</div>
+      <div class="op-lbl">🌅 明日開盤建議 · ${(() => { const t=new Date(); const next=new Date(t); next.setDate(t.getDate()+1); return (next.getMonth()+1)+'月'+next.getDate()+'日'; })()}</div>
       <div class="op-v" id="op-v">${opening.v}</div>
       <div class="op-r" id="op-r">${opening.r}</div>
     </div>
@@ -642,7 +642,9 @@ function renderHome() {
   // API 即時更新明日開盤建議
   setTimeout(function() {
     if (!sp500 && !taiex) return;
-    const opPrompt = '你是台股分析師，根據以下數據給出明日台股開盤建議（繁體中文，直接給結論，2-3句）：\n'
+    var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+    var tomorrowStr = (tomorrow.getMonth()+1)+'月'+tomorrow.getDate()+'日';
+    const opPrompt = '你是台股分析師，請給出'+tomorrowStr+'台股開盤建議（繁體中文，直接給結論，2-3句）：\n'
       + 'S&P500：'+(sp500?(sp500.changePct>=0?'+':'')+sp500.changePct.toFixed(2)+'%':'—')+'\n'
       + '那斯達克：'+(nasdaq?(nasdaq.changePct>=0?'+':'')+nasdaq.changePct.toFixed(2)+'%':'—')+'\n'
       + '費半：'+(sox?(sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%':'—')+'\n'
@@ -658,6 +660,7 @@ function renderHome() {
         vEl.textContent = lines[0];
         rEl.textContent = lines.slice(1).join(' ');
       } else {
+        vEl.textContent = text.length > 20 ? text.slice(0,20) : text;
         rEl.textContent = text;
       }
     });
@@ -816,7 +819,7 @@ function renderAI() {
   document.getElementById('p-ai').innerHTML = `
     <!-- 美股日報 -->
     <div class="card acc-gd" style="background:#fffdf5">
-      <div style="font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📋 美股日報 · ${ds}</div>
+      <div style="font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📋 美股日報 · ${(now.getMonth()+1)+'月'+now.getDate()+'日'}</div>
       <p style="font-size:13px;line-height:1.85">
         ${usEmoji} 費半 <strong>${sox?(sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%':'—'}</strong>、
         那斯達克 <strong>${nasdaq?(nasdaq.changePct>=0?'+':'')+nasdaq.changePct.toFixed(2)+'%':'—'}</strong>、
@@ -832,7 +835,7 @@ function renderAI() {
 
     <!-- 台股即時分析 -->
     <div class="card" style="border-left:3px solid ${sessionColor}">
-      <div style="font-size:10px;font-weight:700;color:${sessionColor};text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">${sessionLabel} · ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}</div>
+      <div style="font-size:10px;font-weight:700;color:${sessionColor};text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">${sessionLabel} · ${(now.getMonth()+1)+'月'+now.getDate()+'日'} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}</div>
       <p style="font-size:13px;line-height:1.85;color:var(--text)">${buildAnalysis()}</p>
     </div>
 
@@ -868,34 +871,18 @@ function renderAI() {
 
 
   document.getElementById('p-ai').innerHTML += `
-    <div class="st">AI 推薦買進</div>
-    ${AI_RECS.map(r=>{
-      const p = gP(r.code);
-      const sc = r.score>=80?'#16a34a':r.score>=65?'#d97706':'#888';
-      return `<div class="card cp ${r.a==='buy'?'acc-dn':'acc-bl'}" onclick="openAIDetail('${r.code}')">
-        <div class="sr">
-          <div class="sl"><h3>${r.name} <span style="font-size:11px;font-weight:400;color:var(--text3)">${r.code}</span></h3>
-            <div class="meta" style="margin-top:4px">
-              ${p ? (()=>{
-                const inZone = p.price >= r.entryLow && p.price <= r.entryHigh;
-                const below  = p.price < r.entryLow;
-                const zoneStr = '$'+fmtN(r.entryLow)+' ~ $'+fmtN(r.entryHigh);
-                const status = inZone ? '<span style="color:#166534;font-weight:700">✅ 現已在建議入場區</span>' :
-                               below  ? '<span style="color:#1d4ed8">📉 低於建議區，可積極布局</span>' :
-                                        '<span style="color:#92670a">⏳ 高於建議區，等待回測</span>';
-                return '現價 <strong>$'+fmtN(p.price)+'</strong> · 建議入場區：'+zoneStr+' · 停損 $'+fmtN(r.stop)+'<br>'+status;
-              })() : '載入中'}
-            </div>
-            ${tagH(r.a)}
-          </div>
-          <div class="sr-r"><div style="font-size:28px;font-weight:700;font-family:'Space Mono',monospace;color:${sc}">${r.score}</div>
-            <div style="font-size:10px;color:var(--text3)">AI評分</div>
-          </div>
-        </div>
-        <div class="sb"><div class="sb-track"><div class="sb-fill" style="width:${r.score}%;background:${sc}"></div></div><div class="sb-n" style="color:${sc}">${r.score}</div></div>
-        <div style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.7">${r.r}</div>
-      </div>`;
-    }).join('')}
+    <div class="st" id="recs-title">📊 AI 今日選股</div>
+    <div id="ai-recs-loading" style="padding:20px;text-align:center;color:var(--text3);font-size:13px">⏳ AI 選股中...</div>
+    <div id="ai-recs-ready" style="display:none">
+      <div style="background:#f0fdf4;border-radius:10px;padding:10px 12px;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:8px">✅ 現價符合入場區間（可考慮進場）</div>
+        <div id="recs-in-zone"></div>
+      </div>
+      <div style="background:#fffbeb;border-radius:10px;padding:10px 12px">
+        <div style="font-size:11px;font-weight:700;color:#92670a;margin-bottom:8px">⏳ 現價高於建議區（等待回測）</div>
+        <div id="recs-wait-zone"></div>
+      </div>
+    </div>
 
     <div class="st" style="margin-top:8px">持倉健診</div>
     ${(acc.stocks||[]).map((s,si)=>{
@@ -919,6 +906,77 @@ function renderAI() {
       </div>`;
     }).join('')}
     <div style="height:20px"></div>`;
+
+  // ── AI 今日選股（Groq 動態生成）──────────────────────────
+  (function() {
+    var titleEl = document.getElementById('recs-title');
+    var today = (now.getMonth()+1)+'月'+now.getDate()+'日';
+    if (titleEl) titleEl.textContent = '📊 AI 今日選股 · '+today;
+
+    var _t=gP('TAIEX'),_s=gP('^SOX'),_s5=gP('^GSPC'),_tmc=gP('2330');
+    var rPrompt = '你是台灣股市分析師，今天是'+today+'。今日市場：\n'
+      +'加權：'+(_t?_t.price?.toLocaleString()+'點（'+(_t.changePct>=0?'+':'')+_t.changePct?.toFixed(2)+'%）':'—')+'\n'
+      +'費半：'+(_s?(_s.changePct>=0?'+':'')+_s.changePct?.toFixed(2)+'%':'—')+'\n'
+      +'S&P500：'+(_s5?(_s5.changePct>=0?'+':'')+_s5.changePct?.toFixed(2)+'%':'—')+'\n'
+      +'台積電：'+(_tmc?'$'+_tmc.price?.toFixed(0)+'（'+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%）':'—')+'\n\n'
+      +'請推薦10支台股標的，回覆只有JSON陣列，每個物件格式：\n'
+      +'{"g":1或2,"code":"代碼","name":"名稱","entry":建議入場價數字,"stop":停損價數字,"score":評分1-100,"r":"推薦理由一句話"}\n'
+      +'g=1：現價已在合理入場區間（5支）\n'
+      +'g=2：體質好但現價偏高需等待（5支）\n'
+      +'只回JSON，不要任何說明文字。';
+
+    callAI(rPrompt, function(text) {
+      try {
+        var clean = text.replace(/```json|```/g,'').trim();
+        var recs = JSON.parse(clean);
+        if (!Array.isArray(recs)) throw new Error('not array');
+
+        var inZone = recs.filter(function(r){return r.g===1;});
+        var waiting = recs.filter(function(r){return r.g===2;});
+
+        function makeCard(r) {
+          var p = gP(r.code);
+          var cp = p ? p.price : null;
+          var sc = r.score>=80?'#16a34a':r.score>=65?'#d97706':'#888';
+          var pi = cp ? ('現價 <b>$'+fmtN(cp)+'</b> · 入場 $'+fmtN(r.entry)+' · 停損 $'+fmtN(r.stop))
+                      : ('建議入場 $'+fmtN(r.entry)+' · 停損 $'+fmtN(r.stop));
+          var el = document.createElement('div');
+          el.className='card cp';
+          el.style.cssText='margin-bottom:8px;cursor:pointer';
+          el.innerHTML='<div class="sr"><div class="sl">'
+            +'<h3>'+r.name+' <span style="font-size:11px;color:var(--text3)">'+r.code+'</span></h3>'
+            +'<div class="meta" style="margin-top:4px">'+pi+'</div>'
+            +'</div><div class="sr-r"><div style="font-size:24px;font-weight:700;font-family:monospace;color:'+sc+'">'+r.score+'</div>'
+            +'<div style="font-size:10px;color:var(--text3)">評分</div></div></div>'
+            +'<div style="font-size:12px;color:var(--text2);margin-top:6px;line-height:1.6">'+r.r+'</div>';
+          el.onclick = function() {
+            // 動態加入 AI_RECS 並開啟詳情
+            var existing = AI_RECS.find(function(x){return x.code===r.code;});
+            if (!existing) AI_RECS.push({code:r.code,name:r.name,score:r.score,a:'buy',
+              entryLow:r.entry*0.98,entryHigh:r.entry*1.02,stop:r.stop,tech:'',fund:'',chip:'',r:r.r});
+            openAIDetail(r.code);
+          };
+          return el;
+        }
+
+        var izEl=document.getElementById('recs-in-zone');
+        var wzEl=document.getElementById('recs-wait-zone');
+        izEl.innerHTML=''; wzEl.innerHTML='';
+        if(inZone.length) inZone.forEach(function(r){izEl.appendChild(makeCard(r));});
+        else izEl.innerHTML='<div style="color:var(--text3);font-size:13px;padding:4px">今日無符合入場的標的</div>';
+        if(waiting.length) waiting.forEach(function(r){wzEl.appendChild(makeCard(r));});
+        else wzEl.innerHTML='<div style="color:var(--text3);font-size:13px;padding:4px">今日無等待中的標的</div>';
+
+        document.getElementById('ai-recs-loading').style.display='none';
+        document.getElementById('ai-recs-ready').style.display='block';
+      } catch(e) {
+        document.getElementById('ai-recs-loading').textContent='選股分析失敗，請重新整理';
+        console.log('recs err:',e,text.slice(0,200));
+      }
+    }, function(){
+      document.getElementById('ai-recs-loading').textContent='選股分析失敗，請稍後再試';
+    });
+  })();
 
   // AI 批次健診所有持倉
   const _taiexAI = gP('TAIEX'), _soxAI = gP('^SOX');
