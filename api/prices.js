@@ -63,15 +63,28 @@ export default async function handler(req, res) {
   // ── 3. 台指期近月 via Fugle futopt endpoint ───────────────────────
   // 台指期代碼格式：TXF + 月份英文字母 + 年份末碼
   // 月份對照：1=A 2=B 3=C 4=D 5=E 6=F 7=G 8=H 9=I 10=J 11=K 12=L
+  // 結算日：每月第三個星期三，結算後近月換成下個月
   try {
     const now = new Date();
     const monthCodes = ['A','B','C','D','E','F','G','H','I','J','K','L'];
     const yr = String(now.getFullYear()).slice(-1);
-    // 嘗試當月和下月（台指期到期前夕近月會換）
-    const months = [now.getMonth(), (now.getMonth()+1) % 12];
+
+    // 計算當月第三個星期三
+    const y = now.getFullYear(), mo = now.getMonth();
+    let wedCount = 0, settlDay = 0;
+    for (let d = 1; d <= 31; d++) {
+      const dt = new Date(y, mo, d);
+      if (dt.getMonth() !== mo) break;
+      if (dt.getDay() === 3) { wedCount++; if (wedCount === 3) { settlDay = d; break; } }
+    }
+    // 若今天已過結算日，近月從下個月開始
+    const baseMonth = (now.getDate() > settlDay) ? (mo + 1) % 12 : mo;
+    const months = [baseMonth, (baseMonth + 1) % 12];
     let txfData = null;
     for (const m of months) {
-      const sym = `TXF${monthCodes[m]}${yr}`;
+      // 跨年處理：12月結算後換隔年1月，年份末碼要+1
+      const symYr = (m < mo && mo === 11) ? String(now.getFullYear() + 1).slice(-1) : yr;
+      const sym = `TXF${monthCodes[m]}${symYr}`;
       try {
         const r = await fetch(
           `https://api.fugle.tw/marketdata/v1.0/futopt/intraday/quote/${sym}`,
