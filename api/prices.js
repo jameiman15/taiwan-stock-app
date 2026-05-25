@@ -63,8 +63,9 @@ export default async function handler(req, res) {
   // ── 3. 台指期 via Yahoo Finance（Fugle 期貨需付費，改用 Yahoo）──
   try {
     const txfUrl = `https://query2.finance.yahoo.com/v8/finance/chart/TW%3DF?interval=1d&range=5d`;
+    const txfUA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
     const txfR = await fetch(txfUrl, {
-      headers: { 'User-Agent': UA, 'Accept': 'application/json', 'Referer': 'https://finance.yahoo.com' },
+      headers: { 'User-Agent': txfUA, 'Accept': 'application/json', 'Referer': 'https://finance.yahoo.com' },
       signal: AbortSignal.timeout(8000),
     });
     if (txfR.ok) {
