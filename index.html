@@ -824,7 +824,7 @@ function runBatchDiag() {
   });
 }
 
-function openDailyReport() {
+async function openDailyReport() {
   // 建立報告 overlay
   document.getElementById('daily-report-modal')?.remove();
   const el = document.createElement('div');
@@ -850,26 +850,67 @@ function openDailyReport() {
     +'\n那斯達克：'+(_nas?(_nas.changePct>=0?'+':'')+_nas.changePct?.toFixed(2)+'%':'—')
     +'\n台積電：'+(_tmc?'$'+_tmc.price?.toFixed(0)+'（'+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%）':'—');
 
-  const framework = '請用保守、理性、數據導向方式分析，從以下角度評估每檔：\n'
+  // ── 抓台股AI概念股即時價格 ──────────────────────────────────────
+  const TW_AI_CODES = ['2330','2379','2454','3711','6669','3034','2308','2317','6770','3443','2382','4938','3035','6415','2303'];
+  const TW_AI_NAMES = {'2330':'台積電','2379':'瑞昱','2454':'聯發科','3711':'日月光投控','6669':'緯穎','3034':'聯詠','2308':'台達電','2317':'鴻海','6770':'力積電','3443':'創意','2382':'廣達','4938':'和碩','3035':'智原','6415':'矽力-KY','2303':'聯電'};
+  const US_AI_CODES = ['NVDA','META','MSFT','GOOGL','AMD','AVGO','TSM','ORCL','AMZN','QCOM'];
+  const US_AI_NAMES = {'NVDA':'NVIDIA','META':'Meta','MSFT':'Microsoft','GOOGL':'Google','AMD':'AMD','AVGO':'Broadcom','TSM':'台積電ADR','ORCL':'Oracle','AMZN':'Amazon','QCOM':'高通'};
+
+  // 更新 loading 提示
+  const reportEl2 = document.getElementById('daily-report-content');
+  if (reportEl2) reportEl2.innerHTML = '<div style="color:var(--text3)">⏳ 抓取即時股價中...</div>';
+
+  // 平行抓台股+美股即時價格
+  let twPriceData = {}, usPriceData = {};
+  try {
+    const [twRes, usRes] = await Promise.allSettled([
+      fetch('/api/prices?codes='+TW_AI_CODES.join(',')).then(r=>r.json()).catch(()=>({})),
+      fetch('/api/prices?codes='+US_AI_CODES.join(',')).then(r=>r.json()).catch(()=>({})),
+    ]);
+    if (twRes.status==='fulfilled' && twRes.value?.data) twPriceData = twRes.value.data;
+    if (usRes.status==='fulfilled' && usRes.value?.data) usPriceData = usRes.value.data;
+  } catch(e) { console.log('price fetch error:', e); }
+
+  // 組台股價格字串
+  const twPriceLines = TW_AI_CODES.map(code => {
+    const p = twPriceData[code] || gP(code);
+    const name = TW_AI_NAMES[code] || code;
+    if (!p || !p.price) return code+'('+name+')：無資料';
+    return code+'('+name+')：$'+p.price.toFixed(0)+'  今日'+( p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%';
+  }).join('\n');
+
+  // 組美股價格字串
+  const usPriceLines = US_AI_CODES.map(code => {
+    const p = usPriceData[code] || gP(code);
+    const name = US_AI_NAMES[code] || code;
+    if (!p || !p.price) return code+'('+name+')：無資料';
+    return code+'('+name+')：$'+p.price.toFixed(2)+'  今日'+(p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%';
+  }).join('\n');
+
+  const framework = '以上為今日實際即時股價，請基於這些真實價格評估估值合理性。\n'
+    +'請用保守、理性、數據導向方式分析，從以下角度評估每檔：\n'
     +'① 真正受惠AI的原因（商業模式與護城河）\n'
     +'② 近年營收與獲利趨勢（毛利率、EPS成長）\n'
     +'③ 財務體質（現金流、負債比）\n'
     +'④ 產業地位與競爭優勢\n'
-    +'⑤ 估值合理性（本益比、PBR vs歷史均值）\n'
+    +'⑤ 估值合理性（本益比、PBR，結合上方真實股價判斷現在貴或便宜）\n'
     +'⑥ 建議操作：可分批買進 / 等待回檔 / 觀察 / 避開\n\n'
     +'最後選出最值得優先研究的3檔，提供：合理買進區間、分批布局方式、停損條件、主要風險\n'
     +'並提醒哪些熱門股可能已過熱不建議追高。\n'
     +'格式清晰適合手機閱讀，使用繁體中文。';
 
   const twPrompt = '你是擁有50年實戰經驗的資深股票研究員。今天是'+today+'。\n今日市場：\n'+marketData+'\n\n'
+    +'【今日台股AI概念股即時報價】\n'+twPriceLines+'\n\n'
     +'【任務一：台股AI精選 5~10檔】\n'
-    +'請從台股中篩選真正受惠AI趨勢的標的，涵蓋半導體、AI伺服器、散熱、先進封裝、AI應用等族群。\n'
+    +'請從上方清單中篩選真正受惠AI趨勢的標的，涵蓋半導體、AI伺服器、散熱、先進封裝、AI應用等族群。\n'
+    +'財務數據（本益比、EPS、毛利率）請用你的訓練知識，但股價必須參考上方今日實際報價。\n'
     + framework;
 
   const usPrompt = '你是擁有50年實戰經驗的資深股票研究員。今天是'+today+'。\n今日市場：\n'+marketData+'\n\n'
+    +'【今日美股AI概念股即時報價】\n'+usPriceLines+'\n\n'
     +'【任務二：美股AI精選 5~10檔】\n'
-    +'請從美股中篩選真正受惠AI趨勢的標的，涵蓋算力、雲端、AI應用、AI基礎設施、半導體等領域。\n'
-    +'重點評估NVIDIA、Meta、Microsoft、Google、AMD、Broadcom、TSMC ADR等及其他被低估的AI受惠股。\n'
+    +'請從上方清單中篩選真正受惠AI趨勢的標的，涵蓋算力、雲端、AI應用、AI基礎設施、半導體等領域。\n'
+    +'財務數據（本益比、EPS、毛利率）請用你的訓練知識，但股價必須參考上方今日實際報價。\n'
     + framework;
 
   function formatReport(text) {
