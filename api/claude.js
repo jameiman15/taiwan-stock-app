@@ -6,7 +6,6 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const KEYS = [
-    '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',  // 填入 Key 1
     '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',  // 填入 Key 2
     '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',  // 填入 Key 3
   ].filter(k => k && !k.startsWith('YOUR_'));
