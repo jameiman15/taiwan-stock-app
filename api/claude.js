@@ -5,13 +5,15 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).end();
 
+  // Key 從 Vercel 環境變數讀取，不寫在程式碼裡避免被 GitHub 掃描撤銷
   const KEYS = [
-    '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',  // 填入 Key 2
-    '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',  // 填入 Key 3
-  ].filter(k => k && !k.startsWith('YOUR_'));
+    process.env.GROQ_KEY_1,
+    process.env.GROQ_KEY_2,
+    process.env.GROQ_KEY_3,
+  ].filter(k => k && k.startsWith('gsk_'));
 
   if (KEYS.length === 0) {
-    return res.status(500).json({ ok: false, error: 'No API keys configured' });
+    return res.status(500).json({ ok: false, error: 'No valid API keys in environment' });
   }
 
   const { prompt } = req.body;
@@ -19,25 +21,23 @@ export default async function handler(req, res) {
 
   const MODELS = [
     'llama-3.3-70b-versatile',
-    'llama-3.1-70b-versatile',
     'llama-3.1-8b-instant',
     'gemma2-9b-it',
   ];
 
-  const SYSTEM = '你是一位資深台灣股市基金經理人，擁有50年實戰經驗，勝率長期高於90%。擅長結合基本面、技術面、籌碼面三位一體分析。回答使用繁體中文，直接給結論，不說廢話。';
+  const SYSTEM = '你是一位資深台灣股市基金經理人，擁有50年實戰經驗，勝率長期高於90%。回答使用繁體中文，直接給結論。';
 
   for (const model of MODELS) {
-    for (let ki = 0; ki < KEYS.length; ki++) {
-      const key = KEYS[ki];
+    for (let i = 0; i < KEYS.length; i++) {
       try {
         const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${key}`,
+            'Authorization': 'Bearer ' + KEYS[i],
           },
           body: JSON.stringify({
-            model,
+            model: model,
             messages: [
               { role: 'system', content: SYSTEM },
               { role: 'user', content: prompt }
@@ -49,32 +49,22 @@ export default async function handler(req, res) {
         });
 
         const d = await r.json();
+        console.log('model:' + model + ' key' + (i+1) + ' status:' + r.status);
 
-        if (r.status === 429) {
-          console.log(`${model} key${ki+1} rate limited, try next key`);
-          continue; // 換下一個 key
-        }
-        if (r.status === 401) {
-          console.log(`${model} key${ki+1} invalid/revoked, try next key`);
-          continue; // 換下一個 key（不是 break）
-        }
-        if (!r.ok) {
-          console.log(`${model} key${ki+1} status:${r.status}, try next model`);
-          break; // 這個 model 有問題，換下一個 model
-        }
+        if (r.status === 429 || r.status === 401) continue;
+        if (!r.ok) break;
 
-        const text = d?.choices?.[0]?.message?.content || '';
+        const text = d && d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content;
         if (text) {
-          console.log(`✅ ${model} key${ki+1} success length:${text.length}`);
-          return res.status(200).json({ ok: true, text, model });
+          return res.status(200).json({ ok: true, text: text, model: model });
         }
 
       } catch(e) {
-        console.log(`${model} key${ki+1} error: ${e.message}`);
+        console.log('error:' + e.message);
         continue;
       }
     }
   }
 
-  return res.status(500).json({ ok: false, error: 'all attempts failed' });
+  return res.status(500).json({ ok: false, error: 'all failed' });
 }
