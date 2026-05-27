@@ -94,13 +94,17 @@ export default async function handler(req, res) {
     }
   } catch(e) { console.log('TXF Yahoo error:', e.message); }
 
-  // ── 3. 美股指數 + 台積電ADR via Yahoo Finance ─────────────────────
-  const US_SYMBOLS = {
+  // ── 3. 美股指數 + 動態個股 via Yahoo Finance ─────────────────────
+  const US_BASE = {
     '^IXIC': '那斯達克',
     '^GSPC': 'S&P500',
     '^SOX' : '費城半導體',
     'TSM'  : '台積電ADR',
   };
+  // 合併前端傳入的美股代碼（大寫、非台股代碼）
+  const extraUS = extraCodes.filter(c => !/^\d/.test(c) && !TW_CODES.includes(c));
+  const US_SYMBOLS = { ...US_BASE };
+  extraUS.forEach(c => { if (!US_SYMBOLS[c]) US_SYMBOLS[c] = c; });
 
   await Promise.allSettled(
     Object.entries(US_SYMBOLS).map(async ([sym, name]) => {
