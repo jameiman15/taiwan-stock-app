@@ -51,7 +51,28 @@ export default async function handler(req, res) {
   }
 
   if (!candles.length) {
-    return res.status(200).json({ ok: false, error: 'no data', code, tried: symbols });
+    // 最後嘗試用 Fugle historical（免費方案有限制但試看看）
+    const FUGLE_KEY = 'YTU1NzQ0ZjgtOGNlMy00MjlhLWE0ZTItMDgwYWIyMjM0YmE0IGQzMDkwNTE2LTZjZjMtNGY4My1hNmYzLTdhZDliYmU1Yjg0Zg==';
+    try {
+      const fr = await fetch(
+        `https://api.fugle.tw/marketdata/v1.0/stock/historical/candles/${code}?timeframe=D&limit=60`,
+        { headers: { 'X-API-KEY': FUGLE_KEY }, signal: AbortSignal.timeout(8000) }
+      );
+      if (fr.ok) {
+        const fd = await fr.json();
+        const fc = fd?.data?.candles || [];
+        if (fc.length > 5) {
+          candles = fc.map(c => ({
+            date: c.date?.slice(0,10),
+            open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume
+          })).reverse().filter(c => c.close > 0);
+        }
+      }
+    } catch(e) {}
+  }
+
+  if (!candles.length) {
+    return res.status(200).json({ ok: false, error: 'no data from Yahoo or Fugle', code, tried: symbols });
   }
 
   const closes  = candles.map(c => c.close);
