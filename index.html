@@ -560,10 +560,12 @@ function loadStockAISuggest(code, name, cost, qty) {
   if (!p) { el.innerHTML = '<span style="color:var(--text3)">股價載入中</span>'; return; }
   const roi = ((p.price - cost) / cost * 100).toFixed(1);
   const taiex = gP('TAIEX'), sox = gP('^SOX');
-  const prompt = '台股分析師快速評估，只回JSON：\n'
-    +'股票：'+name+'('+code+') 成本$'+cost+' 現價$'+p.price.toFixed(0)+' 損益'+roi+'%\n'
-    +'大盤：加權'+(taiex?(taiex.changePct>=0?'+':'')+taiex.changePct.toFixed(2)+'%':'—')+' 費半'+(sox?(sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%':'—')+'\n\n'
-    +'請回JSON：{"action":"續抱或加碼或減碼或停損","reasons":["理由1","理由2","理由3"],"target":目標價數字,"stop":停損價數字}\n只回JSON，不要其他文字。';
+  const taiexStr = taiex ? (taiex.changePct>=0?'+':'')+taiex.changePct.toFixed(2)+'%' : '—';
+  const soxStr   = sox   ? (sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%'   : '—';
+  const prompt = getPrompt('stockSuggest')
+    .replace('{name}', name).replace('{code}', code)
+    .replace('{cost}', cost).replace('{price}', p.price.toFixed(0))
+    .replace('{roi}', roi).replace('{taiex}', taiexStr).replace('{sox}', soxStr);
   callAI(prompt, function(text) {
     try {
       var d = JSON.parse(text.replace(/```json|```/g,'').trim());
@@ -1653,7 +1655,14 @@ top=最強3族群（2-3字），weak=最弱2族群（2-3字），strategy=今日
 
 最後選出最值得優先研究的3檔，提供：合理買進區間、分批布局方式、停損條件、主要風險
 並提醒哪些熱門股可能已過熱不建議追高。
-格式清晰適合手機閱讀，使用繁體中文。`
+格式清晰適合手機閱讀，使用繁體中文。`,
+
+  stockSuggest: `台股分析師快速評估，只回JSON：
+股票：{name}({code}) 成本\${cost} 現價\${price} 損益{roi}%
+大盤：加權{taiex} 費半{sox}
+
+請回JSON：{"action":"續抱或加碼或減碼或停損","reasons":["理由1","理由2","理由3"],"target":目標價數字,"stop":停損價數字}
+只回JSON，不要其他文字。`
 };
 
 // 從 localStorage 讀取自訂 prompt
@@ -1680,18 +1689,19 @@ function resetPrompt(key) {
 
 function renderAlert() {
   const TOOLS = [
-    { key: 'signal',    icon: '🌅', name: '明日台股燈號',    desc: '總覽頁「明日台股燈號」族群+策略',           vars: '{date} {mktData}' },
-    { key: 'framework', icon: '📋', name: '每日AI報告框架',   desc: '每日AI投資報告的分析框架（台股+美股共用）',  vars: '（無，直接作為分析指示）' },
-    { key: 'opening',   icon: '🌄', name: '明日開盤建議',    desc: '總覽頁頂部「明日開盤建議」',                vars: '{tomorrow} {sp500} {nasdaq} {sox} {tsm} {taiex}' },
-    { key: 'sector',    icon: '📊', name: 'AI族群趨勢結論',  desc: 'AI分析頁「AI族群趨勢結論」',                vars: '{taiex} {tsmc} {sox} {sp500}' },
-    { key: 'stockPick', icon: '🎯', name: 'AI今日選股',      desc: 'AI分析頁「AI今日選股」',                    vars: '{today} {taiex} {sox} {sp500} {tsmc} {knownPrices}' },
-    { key: 'batchDiag', icon: '🤖', name: '持倉AI健診',      desc: 'AI分析頁「AI健診」批次',                    vars: '{name} {code} {type} {cost} {price} {klineData}' },
-    { key: 'indivDiag', icon: '🔬', name: '個股詳細健診',    desc: '點進個股後的詳細AI分析',                    vars: '{name} {code} {type} {cost} {price} {changePct} {roi} {taiex} {sox} {klineData}' },
-    { key: 'recDiag',   icon: '💡', name: '選股深度分析',    desc: 'AI今日選股點進後的完整分析報告',             vars: '{name} {code} {price} {changePct} {entryRange} {stop} {taiex} {klineData}' },
-    { key: 'dailyTW',   icon: '🇹🇼', name: '每日台股AI精選',  desc: '每日AI投資報告 台股部分',                   vars: '{today} {marketData} {twValRef} {twPriceLines}' },
-    { key: 'dailyUS',   icon: '🇺🇸', name: '每日美股AI精選',  desc: '每日AI投資報告 美股部分',                   vars: '{today} {marketData} {usValRef} {usPriceLines}' },
-    { key: 'kline',     icon: '📈', name: 'K線AI分析',       desc: '持倉頁每張股票卡「📈 K線」按鈕',            vars: '{today} {name} {code} {klineData}' },
-    { key: 'company',   icon: '🏢', name: '公司深度分析',    desc: '持倉頁每張股票卡「🏢 公司」按鈕',            vars: '{today} {name} {code} {price}' },
+    { key: 'signal',      icon: '🌅', name: '明日台股燈號',    desc: '總覽頁「明日台股燈號」族群+策略',           vars: '{date} {mktData}' },
+    { key: 'framework',   icon: '📋', name: '每日AI報告框架',   desc: '每日AI投資報告的分析框架（台股+美股共用）',  vars: '（無，直接作為分析指示）' },
+    { key: 'stockSuggest',icon: '💬', name: '持倉卡片AI建議',   desc: '持倉頁每張股票卡下方的 AI建議（續抱/加碼/減碼/停損）', vars: '{name} {code} {cost} {price} {roi} {taiex} {sox}' },
+    { key: 'opening',     icon: '🌄', name: '明日開盤建議',    desc: '總覽頁頂部「明日開盤建議」',                vars: '{tomorrow} {sp500} {nasdaq} {sox} {tsm} {taiex}' },
+    { key: 'sector',      icon: '📊', name: 'AI族群趨勢結論',  desc: 'AI分析頁「AI族群趨勢結論」',                vars: '{taiex} {tsmc} {sox} {sp500}' },
+    { key: 'stockPick',   icon: '🎯', name: 'AI今日選股',      desc: 'AI分析頁「AI今日選股」',                    vars: '{today} {taiex} {sox} {sp500} {tsmc} {knownPrices}' },
+    { key: 'batchDiag',   icon: '🤖', name: '持倉AI健診',      desc: 'AI分析頁「AI健診」批次',                    vars: '{name} {code} {type} {cost} {price} {klineData}' },
+    { key: 'indivDiag',   icon: '🔬', name: '個股詳細健診',    desc: '點進個股後的詳細AI分析',                    vars: '{name} {code} {type} {cost} {price} {changePct} {roi} {taiex} {sox} {klineData}' },
+    { key: 'recDiag',     icon: '💡', name: '選股深度分析',    desc: 'AI今日選股點進後的完整分析報告',             vars: '{name} {code} {price} {changePct} {entryRange} {stop} {taiex} {klineData}' },
+    { key: 'dailyTW',     icon: '🇹🇼', name: '每日台股AI精選',  desc: '每日AI投資報告 台股部分',                   vars: '{today} {marketData} {twValRef} {twPriceLines}' },
+    { key: 'dailyUS',     icon: '🇺🇸', name: '每日美股AI精選',  desc: '每日AI投資報告 美股部分',                   vars: '{today} {marketData} {usValRef} {usPriceLines}' },
+    { key: 'kline',       icon: '📈', name: 'K線AI分析',       desc: '持倉頁每張股票卡「📈 K線」按鈕',            vars: '{today} {name} {code} {klineData}' },
+    { key: 'company',     icon: '🏢', name: '公司深度分析',    desc: '持倉頁每張股票卡「🏢 公司」按鈕',            vars: '{today} {name} {code} {price}' },
   ];
 
   document.getElementById('p-alert').innerHTML = `
@@ -1700,7 +1710,10 @@ function renderAlert() {
       管理每個 AI 功能的 Prompt。點「編輯」可自訂內容，點「重置」回復預設。<br>
       <span style="color:var(--accent)">花括號變數</span> 會在執行時自動替換為即時數據。
     </div>
-    ${TOOLS.map(t => {
+    ${(() => { try { return JSON.parse(localStorage.getItem('hiddenTools')||'[]'); } catch { return []; } })().length > 0
+      ? `<div style="text-align:right;padding:0 4px 8px"><button onclick="restoreAllTools()" style="font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;font-family:inherit">↩️ 恢復已隱藏的卡片</button></div>`
+      : ''}
+    ${TOOLS.filter(t => { try { return !JSON.parse(localStorage.getItem('hiddenTools')||'[]').includes(t.key); } catch { return true; } }).map(t => {
       const isCustom = (() => { try { return !!JSON.parse(localStorage.getItem('customPrompts')||'{}')[t.key]; } catch { return false; } })();
       return `<div class="card" style="margin-bottom:12px">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
@@ -1711,6 +1724,8 @@ function renderAlert() {
             <div style="font-size:11px;color:var(--text3);margin-bottom:6px">${t.desc}</div>
             <div style="font-size:10px;color:var(--text3);background:var(--surface2);padding:4px 8px;border-radius:6px;font-family:monospace;overflow-x:auto;white-space:nowrap">${t.vars}</div>
           </div>
+          <button onclick="deleteToolCard('${t.key}')" title="隱藏此卡片"
+            style="flex-shrink:0;padding:4px 7px;background:none;border:1.5px solid #fca5a5;border-radius:8px;font-size:13px;color:#dc2626;cursor:pointer;line-height:1;margin-left:4px">🗑</button>
         </div>
         <div style="display:flex;gap:8px;margin-top:10px">
           <button onclick="openPromptEditor('${t.key}')"
@@ -1730,6 +1745,7 @@ function renderAlert() {
 function openPromptEditor(key) {
   const TOOL_NAMES = {
     signal:'🌅 明日台股燈號', framework:'📋 每日AI報告框架',
+    stockSuggest:'💬 持倉卡片AI建議',
     kline:'📈 K線AI分析', company:'🏢 公司深度分析',
     dailyTW:'🇹🇼 每日台股AI精選', dailyUS:'🇺🇸 每日美股AI精選',
     batchDiag:'🤖 持倉AI健診', opening:'🌄 明日開盤建議',
@@ -1743,7 +1759,7 @@ function openPromptEditor(key) {
   el.innerHTML = `<div class="sheet" style="max-height:92vh;display:flex;flex-direction:column">
     <div class="handle"></div>
     <div style="font-size:16px;font-weight:700;margin-bottom:4px">${TOOL_NAMES[key]||key}</div>
-    ${key === 'signal' ? `<div style="font-size:11px;background:#fef9c3;color:#854d0e;border-radius:8px;padding:8px 10px;margin-bottom:8px;line-height:1.6">⚠️ 此 Prompt 必須要求 AI 回傳 JSON 格式，且包含 <b>top</b>（最強族群陣列）、<b>weak</b>（最弱族群陣列）、<b>strategy</b>（策略陣列）三個欄位，否則燈號無法顯示。</div>` : ''}
+    ${(key === 'signal' || key === 'stockSuggest') ? `<div style="font-size:11px;background:#fef9c3;color:#854d0e;border-radius:8px;padding:8px 10px;margin-bottom:8px;line-height:1.6">⚠️ 此 Prompt 必須要求 AI 回傳 JSON 格式${ key==='signal' ? '，且包含 <b>top</b>、<b>weak</b>、<b>strategy</b> 三個欄位' : '，且包含 <b>action</b>、<b>reasons</b>、<b>target</b>、<b>stop</b> 四個欄位'}，否則無法正常顯示。</div>` : ''}
     <div style="font-size:11px;color:var(--text3);margin-bottom:10px">花括號變數會自動替換為即時資料，請勿刪除需要的變數</div>
     <textarea id="prompt-textarea" style="flex:1;min-height:320px;max-height:55vh;width:100%;box-sizing:border-box;border:1.5px solid var(--border2);border-radius:10px;padding:12px;font-size:12px;font-family:inherit;line-height:1.7;resize:vertical;background:var(--surface2);color:var(--text)">${current.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
     <div style="display:flex;gap:8px;margin-top:12px">
@@ -1790,6 +1806,19 @@ function resetPromptConfirm(key) {
   const TOOL_NAMES = {kline:'K線AI分析', company:'公司深度分析', dailyTW:'每日台股AI精選', dailyUS:'每日美股AI精選', batchDiag:'持倉AI健診'};
   if (!confirm('確定重置「'+( TOOL_NAMES[key]||key)+'」回預設 Prompt？')) return;
   resetPrompt(key);
+  renderAlert();
+}
+
+function deleteToolCard(key) {
+  try {
+    const hidden = JSON.parse(localStorage.getItem('hiddenTools') || '[]');
+    if (!hidden.includes(key)) { hidden.push(key); localStorage.setItem('hiddenTools', JSON.stringify(hidden)); }
+  } catch {}
+  renderAlert();
+}
+
+function restoreAllTools() {
+  localStorage.removeItem('hiddenTools');
   renderAlert();
 }
 
