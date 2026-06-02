@@ -539,8 +539,8 @@ function stockCard(s, clickable=true, showDelete=false) {
         <div class="chg">${p ? fmtChg(p.change, p.changePct) : '<span class="neu">---</span>'}</div>
         ${roiH}
         <div style="display:flex;gap:5px;margin-top:8px;justify-content:flex-end">
-          <button onclick="event.stopPropagation();openKlineAnalysis('${s.code}','${s.name}')" style="font-size:10px;padding:3px 8px;border-radius:7px;border:1.5px solid var(--accent);color:var(--accent);background:transparent;cursor:pointer;font-weight:700;font-family:inherit;white-space:nowrap">📈 K線</button>
-          <button onclick="event.stopPropagation();openCompanyAnalysis('${s.code}','${s.name}')" style="font-size:10px;padding:3px 8px;border-radius:7px;border:1.5px solid var(--text3);color:var(--text2);background:transparent;cursor:pointer;font-weight:700;font-family:inherit;white-space:nowrap">🏢 公司</button>
+          <button onclick="event.stopPropagation();openKlineAnalysis('${s.code}','${s.name}')" style="font-size:11px;padding:6px 12px;border-radius:8px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-weight:700;font-family:inherit;white-space:nowrap;letter-spacing:.3px">📈 K線分析</button>
+          <button onclick="event.stopPropagation();openCompanyAnalysis('${s.code}','${s.name}')" style="font-size:11px;padding:6px 12px;border-radius:8px;border:none;background:#0f766e;color:#fff;cursor:pointer;font-weight:700;font-family:inherit;white-space:nowrap;letter-spacing:.3px">🏢 公司分析</button>
         </div>
       </div>
     </div>
@@ -1359,43 +1359,300 @@ async function renderNews() {
   }
 }
 
+// ── AI 工具箱 Prompt 管理 ────────────────────────────────────────
+const DEFAULT_PROMPTS = {
+  kline: `你是資深技術分析師，精通葛蘭碧八大法則。今天是{today}。
+
+以下是{name}（{code}）的60日K線完整技術數據：
+{klineData}
+
+請按以下架構分析：
+【1. 均線系統（葛蘭碧法則）】排列狀態、現價位置、符合哪條法則、短中長期趨勢
+【2. 動能指標】RSI超買超賣、KD黃金/死亡交叉、MACD方向與柱狀體
+【3. 布林通道+乖離率】現價在通道位置、波動狀態
+【4. 量價關係】量能訊號解讀
+【5. K線評分 0~100】給分並說明（80~100強勢多頭/60~79偏多/40~59中性/20~39偏空/0~19弱勢）
+【6. 關鍵價位】第一支撐、第二支撐、停損位、翻多價位、目標價
+
+繁體中文，格式清晰，適合手機閱讀。`,
+
+  company: `扮演資深股票研究分析師。今天是{today}。
+{name}（{code}）{price}
+
+請編寫綜合投資分析報告，詳細、客觀且以數據為導向，使用過去五個完整財政年度和TTM數據：
+
+【1. 執行摘要】業務概述（1句）、投資論點（2-3句）、買入/持有/賣出、主要催化劑與風險
+【2. 財務表現與健康狀況】5年+TTM營收成長、毛利率、淨利率、資產負債表強弱、FCF是否持續為正
+【3. 估值分析】本益比/P/S/P/B/EV/EBITDA，對比5年歷史均值、產業平均、前3競爭對手，結論：高估/低估/合理
+【4. 競爭護城河】核心業務、競爭優勢來源、護城河耐久性
+【5. 成長展望】主要催化劑、TAM市場機會
+【6. 管理與治理】CEO背景任期、資本配置策略、內部人持股
+【7. 風險分析】公司特有風險3項、系統性外部風險3項
+【8. 最終建議】買入/持有/賣出+理由+目標價區間+主要觀察指標
+
+繁體中文，數據導向，適合手機閱讀。`,
+
+  dailyTW: `你是擁有50年實戰經驗的資深股票研究員，以保守價值投資為核心原則。今天是{today}。
+今日市場：
+{marketData}
+
+{twValRef}
+【今日台股AI概念股即時報價】
+{twPriceLines}
+
+【分析規則（必須嚴格遵守）】
+1. 股價：必須使用上方今日即時報價，禁止猜測
+2. 估值：用今日股價÷近期EPS=實際本益比，對照估值基準
+3. 買進區間：必須以合理本益比推算，不可高於合理上緣
+4. 漲幅超過5%：明確警示「今日已大漲X%，不宜追價」
+5. 股價超出合理區間：只能寫「等待回檔」，不可寫「可買進」
+
+請依框架分析每檔：
+① 受惠AI核心原因（一句話）
+② 今日股價、實際本益比、合理區間比較
+③ 估值結論：便宜/合理/偏高/明顯過熱
+④ 建議操作：可分批買進/等待回檔至XX元/觀察/不建議追高
+
+最後選出最值得研究的3檔（必須估值合理或便宜），提供買進價位區間、分批方式、停損條件、主要風險。
+並列出「今日過熱、不建議追高」清單。
+
+格式清晰，適合手機閱讀，繁體中文。`,
+
+  dailyUS: `你是擁有50年實戰經驗的資深股票研究員，以保守價值投資為核心原則。今天是{today}。
+今日市場：
+{marketData}
+
+{usValRef}
+【今日美股AI概念股即時報價】
+{usPriceLines}
+
+【分析規則（必須嚴格遵守）】
+1. 股價：必須使用上方今日即時報價，禁止猜測
+2. 估值：用今日股價÷TTM EPS=實際本益比，對照估值基準
+3. 若今日報價超出合理區間上緣，明確標註「目前估值偏高」
+4. 用今日實際報價÷EPS計算溢價幅度
+
+請依框架分析每檔：
+① 受惠AI核心原因
+② 今日股價、實際本益比、合理區間比較
+③ 估值結論：便宜/合理/偏高/過熱
+④ 建議操作
+
+最後選出最值得研究的3檔，提供買進區間、分批方式、停損條件、主要風險。
+並列出「過熱、不建議追高」清單。
+
+格式清晰，適合手機閱讀，繁體中文。`,
+
+  batchDiag: `你是資深台灣股市經理人。今日大盤：加權{taiex} 費半{sox}
+
+持倉清單：
+{stockList}
+
+請對每支股票給出健診，回覆JSON陣列（只回JSON，不要其他文字）：
+[{"code":"代碼","action":"加倉/續抱/觀察/減碼/停損","reason":"理由一句話含基本面或技術面判斷"}]`,
+
+  opening: `你是台股分析師，請給出{tomorrow}台股開盤建議（繁體中文，直接給結論，2-3句）：
+S&P500：{sp500}
+那斯達克：{nasdaq}
+費半：{sox}
+台積電ADR：{tsm}
+加權指數：{taiex}
+
+格式：第一句整體趨勢判斷，第二句哪些族群可布局，第三句風險提示。`,
+
+  sector: `你是台灣股市分析師，今日數據：
+加權指數：{taiex}
+台積電：{tsmc}
+費半：{sox}
+S&P500：{sp500}
+
+請用繁體中文給出台股族群趨勢結論（每項1-2句）：
+🚀 多頭族群（可布局）：
+👁 觀察族群（等訊號）：
+⚠️ 迴避族群（暫不碰）：
+💡 本週操作重點：`,
+
+  stockPick: `你是一位資深台灣股市基金經理人，勝率長期高於90%。今天是{today}。
+今日市場數據：
+加權指數：{taiex}
+費城半導體：{sox}
+S&P500：{sp500}
+台積電：{tsmc}
+{knownPrices}
+
+請以下列專業框架選出10支台股標的：
+【分析框架】
+1. 商業模式與護城河：產品/服務是否具競爭優勢
+2. 收入結構：營收來源是否多元穩定，重複性收入比例
+3. 毛利率與獲利能力：毛利率趨勢、EPS成長性、ROE水準
+4. 成長動能：法說會展望、訂單能見度、產業趨勢
+5. 估值合理性：本益比/PBR相對歷史均值與同業是否偏低
+6. 籌碼面：外資、投信近期動向，主力籌碼集中度
+7. 技術面：均線多空排列、MACD、RSI、量價關係
+8. 核心風險：主要下行風險一句話
+
+【回覆格式】只回JSON陣列，10個物件，不要任何說明文字：
+g=1（可進場5支）：四大面向均偏多，entry設在當前合理買點
+g=2（等待5支）：基本面佳但技術偏高，entry設在合理回測買點
+[{"g":1,"code":"台股代碼","name":"名稱","entry":建議入場價,"stop":停損價,"target":目標價,"score":評分,"basis":"基本面/技術面/籌碼面/市場面各1句"}]
+
+code必須是真實台股代碼不可重複，name與code完全對應。只回JSON陣列，不要其他任何文字。`,
+
+  indivDiag: `你是台灣股市分析師，請用繁體中文分析以下持股，格式簡潔適合手機閱讀。
+股票：{name}（{code}）
+類型：{type}
+持有成本：\${cost}
+現價：{price}
+今日漲跌：{changePct}
+持有損益：{roi}
+加權指數：{taiex}
+費半：{sox}
+{klineData}
+
+{etfTemplate}`,
+
+  recDiag: `你是一位擁有50年實戰經驗的資深股票研究分析師，保守、理性、數據導向。
+請針對以下推薦股票撰寫完整投資分析報告（繁體中文，格式清晰適合手機閱讀）：
+
+【股票資訊】
+股票：{name}（{code}）
+現價：{price} 今日：{changePct}
+建議入場：{entryRange} 停損：{stop}
+大盤：{taiex}
+{klineData}
+
+請依以下架構分析：
+【執行摘要】業務概述+投資論點（2-3句）+買入/持有/賣出結論+主要催化劑與風險
+【財務表現】近年營收成長+毛利率趨勢+EPS+FCF現金流狀況
+【估值分析】本益比/市淨率 vs 歷史均值與同業，高估/低估/合理定價
+【競爭護城河】核心業務+競爭優勢來源+護城河耐久性
+【成長展望】主要成長催化劑+TAM市場機會+未來12個月展望
+【籌碼面】外資、投信、主力近期動向+內部人持股
+【技術面+K線】結合K線數據：均線多空排列+趨勢強弱+RSI+量價關係+支撐壓力位
+【風險分析】公司特有風險（3項）+系統性風險（3項）
+【關鍵技術訊號】
+轉強訊號：\$XXX（中長線趨勢反轉確認點，說明原因）
+重要壓力：\$XXX（目前最重要短線阻力，說明原因）
+多頭確認：\$XXX（突破此價確認多頭走勢，說明原因）
+【最終建議】買入/持有/賣出評級+合理入場價+停損條件+目標價+主要風險提醒`
+};
+
+// 從 localStorage 讀取自訂 prompt
+function getPrompt(key) {
+  try {
+    const custom = JSON.parse(localStorage.getItem('customPrompts') || '{}');
+    return custom[key] || DEFAULT_PROMPTS[key] || '';
+  } catch { return DEFAULT_PROMPTS[key] || ''; }
+}
+function savePrompt(key, val) {
+  try {
+    const custom = JSON.parse(localStorage.getItem('customPrompts') || '{}');
+    custom[key] = val;
+    localStorage.setItem('customPrompts', JSON.stringify(custom));
+  } catch {}
+}
+function resetPrompt(key) {
+  try {
+    const custom = JSON.parse(localStorage.getItem('customPrompts') || '{}');
+    delete custom[key];
+    localStorage.setItem('customPrompts', JSON.stringify(custom));
+  } catch {}
+}
+
 function renderAlert() {
-  const acc = PF[S.acct] || {stocks:[],funds:[]};
+  const TOOLS = [
+    { key: 'opening',   icon: '🌅', name: '明日開盤建議',   desc: '總覽頁頂部「明日開盤建議」',               vars: '{tomorrow} {sp500} {nasdaq} {sox} {tsm} {taiex}' },
+    { key: 'sector',    icon: '📊', name: 'AI族群趨勢結論', desc: 'AI分析頁「AI族群趨勢結論」',               vars: '{taiex} {tsmc} {sox} {sp500}' },
+    { key: 'stockPick', icon: '🎯', name: 'AI今日選股',     desc: 'AI分析頁「AI今日選股」',                   vars: '{today} {taiex} {sox} {sp500} {tsmc} {knownPrices}' },
+    { key: 'batchDiag', icon: '🤖', name: '持倉AI健診',     desc: 'AI分析頁「AI健診」批次',                   vars: '{name} {code} {type} {cost} {price} {klineData}' },
+    { key: 'indivDiag', icon: '🔬', name: '個股詳細健診',   desc: '點進個股後的詳細AI分析',                   vars: '{name} {code} {type} {cost} {price} {changePct} {roi} {taiex} {sox} {klineData}' },
+    { key: 'recDiag',   icon: '💡', name: '選股深度分析',   desc: 'AI今日選股點進後的完整分析報告',            vars: '{name} {code} {price} {changePct} {entryRange} {stop} {taiex} {klineData}' },
+    { key: 'dailyTW',   icon: '🇹🇼', name: '每日台股AI精選', desc: '每日AI投資報告 台股部分',                  vars: '{today} {marketData} {twValRef} {twPriceLines}' },
+    { key: 'dailyUS',   icon: '🇺🇸', name: '每日美股AI精選', desc: '每日AI投資報告 美股部分',                  vars: '{today} {marketData} {usValRef} {usPriceLines}' },
+    { key: 'kline',     icon: '📈', name: 'K線AI分析',      desc: '持倉頁每張股票卡「📈 K線」按鈕',           vars: '{today} {name} {code} {klineData}' },
+    { key: 'company',   icon: '🏢', name: '公司深度分析',   desc: '持倉頁每張股票卡「🏢 公司」按鈕',           vars: '{today} {name} {code} {price}' },
+  ];
+
   document.getElementById('p-alert').innerHTML = `
-    <div class="st">個股到價提醒</div>
-    <div class="card">
-      ${(acc.stocks||[]).map(s=>{
-        const key = S.acct+'_'+s.code;
-        const on = !!S.alerts[key];
-        const pv = S.alertPrices[key] || '';
-        const p = gP(s.code);
-        return `<div class="ar">
-          <div><div style="font-size:14px;font-weight:600">${s.name}</div>
-            <div style="font-size:11px;color:var(--text3)">現價 ${p?'$'+fmtN(p.price):'載入中'}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <input type="number" class="fi" style="width:85px;padding:7px 10px;font-size:13px" placeholder="目標價" value="${pv}"
-              onchange="setAlP('${key}',this.value)">
-            <div class="toggle ${on?'on':''}" onclick="togAl('${key}',this)"></div>
-          </div>
-        </div>`;
-      }).join('')}
+    <div style="padding:16px 16px 4px;font-size:17px;font-weight:700">🛠 AI 工具箱</div>
+    <div style="padding:0 16px 12px;font-size:12px;color:var(--text3);line-height:1.6">
+      管理每個 AI 功能的 Prompt。點「編輯」可自訂內容，點「重置」回復預設。<br>
+      <span style="color:var(--accent)">花括號變數</span> 會在執行時自動替換為即時數據。
     </div>
-    <div class="st" style="margin-top:8px">AI 推播設定</div>
-    <div class="card">
-      ${[
-        ['投資日報','每日早上 8:30'],
-        ['開盤建議','每日 8:45（含前日美股）'],
-        ['重大新聞即時通','實時'],
-        ['停損警示','跌幅超過設定值時'],
-      ].map((x,i)=>`<div class="ar">
-        <div><div style="font-size:14px;font-weight:600">${x[0]}</div><div style="font-size:11px;color:var(--text3)">${x[1]}</div></div>
-        <div class="toggle ${i<2?'on':''}" onclick="this.classList.toggle('on')"></div>
-      </div>`).join('')}
-    </div>
-    <div style="padding:12px;font-size:11px;color:var(--text3);line-height:1.7">到價通知需允許瀏覽器通知權限。LINE Notify 推播可在部署後透過 Vercel Cron Jobs 設定每日定時推送。</div>
+    ${TOOLS.map(t => {
+      const isCustom = (() => { try { return !!JSON.parse(localStorage.getItem('customPrompts')||'{}')[t.key]; } catch { return false; } })();
+      return `<div class="card" style="margin-bottom:12px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:700;margin-bottom:2px">${t.icon} ${t.name}
+              ${isCustom ? '<span style="font-size:10px;background:var(--accent);color:#fff;padding:1px 6px;border-radius:5px;margin-left:6px">已自訂</span>' : ''}
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:6px">${t.desc}</div>
+            <div style="font-size:10px;color:var(--text3);background:var(--surface2);padding:4px 8px;border-radius:6px;font-family:monospace;overflow-x:auto;white-space:nowrap">${t.vars}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button onclick="openPromptEditor('${t.key}')"
+            style="flex:1;padding:8px;background:var(--text);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">
+            ✏️ 編輯 Prompt
+          </button>
+          ${isCustom ? `<button onclick="resetPromptConfirm('${t.key}')"
+            style="padding:8px 12px;background:none;border:1.5px solid var(--border2);border-radius:8px;font-size:12px;color:var(--text3);cursor:pointer;font-family:inherit">
+            ↩️ 重置
+          </button>` : ''}
+        </div>
+      </div>`;
+    }).join('')}
     <div style="height:20px"></div>`;
-  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+}
+
+function openPromptEditor(key) {
+  const TOOL_NAMES = {kline:'📈 K線AI分析', company:'🏢 公司深度分析', dailyTW:'🇹🇼 每日台股AI精選', dailyUS:'🇺🇸 每日美股AI精選', batchDiag:'🤖 持倉AI健診'};
+  document.getElementById('prompt-editor-modal')?.remove();
+  const el = document.createElement('div');
+  el.className = 'overlay'; el.id = 'prompt-editor-modal';
+  const current = getPrompt(key);
+  el.innerHTML = `<div class="sheet" style="max-height:92vh;display:flex;flex-direction:column">
+    <div class="handle"></div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">${TOOL_NAMES[key]||key}</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">花括號變數會自動替換為即時資料，請勿刪除需要的變數</div>
+    <textarea id="prompt-textarea" style="flex:1;min-height:320px;max-height:55vh;width:100%;box-sizing:border-box;border:1.5px solid var(--border2);border-radius:10px;padding:12px;font-size:12px;font-family:inherit;line-height:1.7;resize:vertical;background:var(--surface2);color:var(--text)">${current.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button onclick="savePromptFromEditor('${key}')"
+        style="flex:1;padding:11px;background:var(--text);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">
+        💾 儲存
+      </button>
+      <button onclick="document.getElementById('prompt-editor-modal').remove()"
+        style="padding:11px 16px;background:none;border:1.5px solid var(--border2);border-radius:10px;font-size:14px;color:var(--text3);cursor:pointer;font-family:inherit">
+        取消
+      </button>
+    </div>
+  </div>`;
+  el.addEventListener('click', e => { if(e.target===el) el.remove(); });
+  document.body.appendChild(el);
+}
+
+function savePromptFromEditor(key) {
+  const ta = document.getElementById('prompt-textarea');
+  if (!ta) return;
+  const val = ta.value.trim();
+  if (!val) return;
+  savePrompt(key, val);
+  document.getElementById('prompt-editor-modal')?.remove();
+  renderAlert(); // 刷新顯示「已自訂」標籤
+  // 顯示儲存成功提示
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:9999;pointer-events:none';
+  toast.textContent = '✅ Prompt 已儲存';
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2000);
+}
+
+function resetPromptConfirm(key) {
+  const TOOL_NAMES = {kline:'K線AI分析', company:'公司深度分析', dailyTW:'每日台股AI精選', dailyUS:'每日美股AI精選', batchDiag:'持倉AI健診'};
+  if (!confirm('確定重置「'+( TOOL_NAMES[key]||key)+'」回預設 Prompt？')) return;
+  resetPrompt(key);
+  renderAlert();
 }
 
 function setAlP(key, val) {
