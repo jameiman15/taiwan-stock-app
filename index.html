@@ -695,6 +695,39 @@ function renderHome() {
         </div>
       </div>
     </div>
+    <!-- 市場溫度計 -->
+    <div class="card" style="margin-bottom:10px;padding:14px 16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700">🌡️ 市場溫度計</div>
+        <div style="font-size:10px;color:var(--text3)" id="thermo-time">盤中/收盤</div>
+      </div>
+      <!-- 溫度條 -->
+      <div style="position:relative;margin-bottom:10px">
+        <div style="height:10px;border-radius:5px;background:linear-gradient(to right,#3b82f6,#22c55e,#facc15,#f97316,#ef4444)"></div>
+        <div id="thermo-needle" style="position:absolute;top:-4px;left:50%;transform:translateX(-50%);width:3px;height:18px;background:var(--text);border-radius:2px;transition:left .6s ease"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-bottom:10px">
+        <span>0 極度恐慌</span><span>50 中性</span><span>100 極度樂觀</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div id="thermo-score" style="font-size:32px;font-weight:800;font-family:'Space Mono',monospace;min-width:56px">—</div>
+        <div>
+          <div id="thermo-label" style="font-size:14px;font-weight:700">⏳ 分析中...</div>
+          <div id="thermo-risk" style="font-size:11px;color:var(--text3);margin-top:2px"></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+        <div style="background:var(--surface2);border-radius:8px;padding:8px 10px">
+          <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:3px">💰 資金流向</div>
+          <div id="thermo-flow" style="font-size:11px;font-weight:600;line-height:1.5">⏳ 載入中...</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:8px 10px">
+          <div style="font-size:9px;color:var(--text3);font-weight:600;margin-bottom:3px">🎯 結論</div>
+          <div id="thermo-conclusion" style="font-size:11px;font-weight:600;line-height:1.5">⏳ 載入中...</div>
+        </div>
+      </div>
+    </div>
+
     <div class="sg">
       <div class="sc"><div class="sc-l">帳戶市值</div><div class="sc-v" style="font-size:13px;">NT$${Math.round(tv).toLocaleString()}</div></div>
       <div class="sc"><div class="sc-l">總損益</div><div class="sc-v ${roi>=0?'up':'dn'}">${roi>=0?'+':''}${roi}%</div></div>
@@ -803,6 +836,76 @@ function renderHome() {
       }
     });
   }, 500);
+
+  // ── 市場溫度計 AI 分析 ──────────────────────────────────────
+  setTimeout(function() {
+    if (!taiex && !sp500) return;
+    var taiexStr  = taiex  ? taiex.price.toFixed(0)+'點（'+(taiex.changePct>=0?'+':'')+taiex.changePct.toFixed(2)+'%）' : '—';
+    var taiexChg  = taiex  ? (taiex.changePct>=0?'+':'')+taiex.changePct.toFixed(2)+'%' : '—';
+    var tsmcStr   = tsmc   ? '$'+tsmc.price.toFixed(0) : '—';
+    var tsmcChg   = tsmc   ? (tsmc.changePct>=0?'+':'')+tsmc.changePct.toFixed(2)+'%' : '—';
+    var nasdaqChg = nasdaq ? (nasdaq.changePct>=0?'+':'')+nasdaq.changePct.toFixed(2)+'%' : '—';
+    var nasdaqStr = nasdaq ? nasdaq.price.toFixed(0) : '—';
+    var soxStr    = sox    ? (sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%' : '—';
+
+    var thermoPrompt = getPrompt('thermo')
+      .replace('{taiex}', taiexStr)
+      .replace('{taiex_change}', taiexChg)
+      .replace('{tsmc}', tsmcStr)
+      .replace('{tsmc_change}', tsmcChg)
+      .replace('{nasdaq}', nasdaqStr)
+      .replace('{nasdaq_change}', nasdaqChg)
+      .replace('{sox}', sox ? sox.price.toFixed(0) : '—')
+      .replace('{sox_change}', soxStr);
+
+    callAI(thermoPrompt, function(text) {
+      // 解析溫度數字
+      var scoreMatch = text.match(/市場溫度[：:]\s*(\d+)/);
+      var score = scoreMatch ? parseInt(scoreMatch[1]) : 50;
+      score = Math.min(100, Math.max(0, score));
+
+      // 解析市場情緒
+      var labelMatch = text.match(/市場情緒[：:]\s*(.+)/);
+      var label = labelMatch ? labelMatch[1].trim() : '—';
+
+      // 解析資金流向
+      var flowMatch = text.match(/資金流向[：:]\s*(.+)/);
+      var flow = flowMatch ? flowMatch[1].trim() : '—';
+
+      // 解析風險等級
+      var riskMatch = text.match(/風險等級[：:]\s*(.+)/);
+      var risk = riskMatch ? riskMatch[1].trim() : '—';
+
+      // 解析結論
+      var conclusionMatch = text.match(/結論[：:]\s*([\s\S]+?)(?:
+|$)/);
+      var conclusion = conclusionMatch ? conclusionMatch[1].trim() : '—';
+
+      // 顏色判斷
+      var scoreColor = score >= 81 ? '#ef4444' : score >= 61 ? '#f97316' : score >= 41 ? '#facc15' : score >= 21 ? '#22c55e' : '#3b82f6';
+      var riskColor  = risk.includes('高') ? '#ef4444' : risk.includes('中') ? '#f97316' : '#22c55e';
+
+      // 更新 DOM
+      var needle = document.getElementById('thermo-needle');
+      var scoreEl = document.getElementById('thermo-score');
+      var labelEl = document.getElementById('thermo-label');
+      var riskEl  = document.getElementById('thermo-risk');
+      var flowEl  = document.getElementById('thermo-flow');
+      var concEl  = document.getElementById('thermo-conclusion');
+      var timeEl  = document.getElementById('thermo-time');
+
+      if (needle) needle.style.left = score + '%';
+      if (scoreEl) { scoreEl.textContent = score; scoreEl.style.color = scoreColor; }
+      if (labelEl) { labelEl.textContent = label; labelEl.style.color = scoreColor; }
+      if (riskEl)  riskEl.innerHTML = '⚠️ 風險：<span style="font-weight:700;color:'+riskColor+'">'+risk+'</span>';
+      if (flowEl)  flowEl.textContent = flow;
+      if (concEl)  concEl.textContent = conclusion;
+      if (timeEl)  { var now=new Date(); timeEl.textContent = (now.getHours().toString().padStart(2,'0'))+':'+(now.getMinutes().toString().padStart(2,'0'))+' 更新'; }
+    }, function() {
+      var labelEl = document.getElementById('thermo-label');
+      if (labelEl) labelEl.textContent = '分析暫不可用';
+    });
+  }, 1000);
 }
 
 function renderPortfolio() {
@@ -1662,7 +1765,34 @@ top=最強3族群（2-3字），weak=最弱2族群（2-3字），strategy=今日
 大盤：加權{taiex} 費半{sox}
 
 請回JSON：{"action":"續抱或加碼或減碼或停損","reasons":["理由1","理由2","理由3"],"target":目標價數字,"stop":停損價數字}
-只回JSON，不要其他文字。`
+只回JSON，不要其他文字。`,
+
+  thermo: `你是一位專業台股策略分析師。
+
+根據以下市場數據：
+
+加權指數：{taiex}
+加權指數漲跌幅：{taiex_change}
+台積電：{tsmc}
+台積電漲跌幅：{tsmc_change}
+NASDAQ：{nasdaq}
+NASDAQ漲跌幅：{nasdaq_change}
+費城半導體指數：{sox}
+費半漲跌幅：{sox_change}
+外資買賣超：資料參考中
+融資增減：資料參考中
+成交量：資料參考中
+
+請評估目前市場情緒。
+
+輸出格式：
+🔥 市場溫度：XX度（0~100）
+📊 市場情緒：（極度恐慌 / 恐慌 / 中性 / 樂觀 / 極度樂觀）
+💰 資金流向：（一句話說明）
+⚠️ 風險等級：（低 / 中 / 高）
+🎯 結論：（50字內）
+
+規則：0~20 極度恐慌｜21~40 恐慌｜41~60 中性｜61~80 樂觀｜81~100 極度樂觀`
 };
 
 // 從 localStorage 讀取自訂 prompt
@@ -1690,6 +1820,7 @@ function resetPrompt(key) {
 function renderAlert() {
   const TOOLS = [
     { key: 'signal',      icon: '🌅', name: '明日台股燈號',    desc: '總覽頁「明日台股燈號」族群+策略',           vars: '{date} {mktData}' },
+    { key: 'thermo',      icon: '🌡️', name: '市場溫度計',      desc: '總覽頁「市場溫度計」熱度與風險分析',        vars: '{taiex} {taiex_change} {tsmc} {tsmc_change} {nasdaq} {nasdaq_change} {sox} {sox_change}' },
     { key: 'framework',   icon: '📋', name: '每日AI報告框架',   desc: '每日AI投資報告的分析框架（台股+美股共用）',  vars: '（無，直接作為分析指示）' },
     { key: 'stockSuggest',icon: '💬', name: '持倉卡片AI建議',   desc: '持倉頁每張股票卡下方的 AI建議（續抱/加碼/減碼/停損）', vars: '{name} {code} {cost} {price} {roi} {taiex} {sox}' },
     { key: 'opening',     icon: '🌄', name: '明日開盤建議',    desc: '總覽頁頂部「明日開盤建議」',                vars: '{tomorrow} {sp500} {nasdaq} {sox} {tsm} {taiex}' },
@@ -1710,10 +1841,7 @@ function renderAlert() {
       管理每個 AI 功能的 Prompt。點「編輯」可自訂內容，點「重置」回復預設。<br>
       <span style="color:var(--accent)">花括號變數</span> 會在執行時自動替換為即時數據。
     </div>
-    ${(() => { try { return JSON.parse(localStorage.getItem('hiddenTools')||'[]'); } catch { return []; } })().length > 0
-      ? `<div style="text-align:right;padding:0 4px 8px"><button onclick="restoreAllTools()" style="font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;font-family:inherit">↩️ 恢復已隱藏的卡片</button></div>`
-      : ''}
-    ${TOOLS.filter(t => { try { return !JSON.parse(localStorage.getItem('hiddenTools')||'[]').includes(t.key); } catch { return true; } }).map(t => {
+    ${TOOLS.map(t => {
       const isCustom = (() => { try { return !!JSON.parse(localStorage.getItem('customPrompts')||'{}')[t.key]; } catch { return false; } })();
       return `<div class="card" style="margin-bottom:12px">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
@@ -1724,8 +1852,6 @@ function renderAlert() {
             <div style="font-size:11px;color:var(--text3);margin-bottom:6px">${t.desc}</div>
             <div style="font-size:10px;color:var(--text3);background:var(--surface2);padding:4px 8px;border-radius:6px;font-family:monospace;overflow-x:auto;white-space:nowrap">${t.vars}</div>
           </div>
-          <button onclick="deleteToolCard('${t.key}')" title="隱藏此卡片"
-            style="flex-shrink:0;padding:4px 7px;background:none;border:1.5px solid #fca5a5;border-radius:8px;font-size:13px;color:#dc2626;cursor:pointer;line-height:1;margin-left:4px">🗑</button>
         </div>
         <div style="display:flex;gap:8px;margin-top:10px">
           <button onclick="openPromptEditor('${t.key}')"
@@ -1744,7 +1870,7 @@ function renderAlert() {
 
 function openPromptEditor(key) {
   const TOOL_NAMES = {
-    signal:'🌅 明日台股燈號', framework:'📋 每日AI報告框架',
+    signal:'🌅 明日台股燈號', thermo:'🌡️ 市場溫度計', framework:'📋 每日AI報告框架',
     stockSuggest:'💬 持倉卡片AI建議',
     kline:'📈 K線AI分析', company:'🏢 公司深度分析',
     dailyTW:'🇹🇼 每日台股AI精選', dailyUS:'🇺🇸 每日美股AI精選',
@@ -1759,7 +1885,7 @@ function openPromptEditor(key) {
   el.innerHTML = `<div class="sheet" style="max-height:92vh;display:flex;flex-direction:column">
     <div class="handle"></div>
     <div style="font-size:16px;font-weight:700;margin-bottom:4px">${TOOL_NAMES[key]||key}</div>
-    ${(key === 'signal' || key === 'stockSuggest') ? `<div style="font-size:11px;background:#fef9c3;color:#854d0e;border-radius:8px;padding:8px 10px;margin-bottom:8px;line-height:1.6">⚠️ 此 Prompt 必須要求 AI 回傳 JSON 格式${ key==='signal' ? '，且包含 <b>top</b>、<b>weak</b>、<b>strategy</b> 三個欄位' : '，且包含 <b>action</b>、<b>reasons</b>、<b>target</b>、<b>stop</b> 四個欄位'}，否則無法正常顯示。</div>` : ''}
+    ${(key === 'signal' || key === 'stockSuggest' || key === 'thermo') ? `<div style="font-size:11px;background:#fef9c3;color:#854d0e;border-radius:8px;padding:8px 10px;margin-bottom:8px;line-height:1.6">⚠️ ${ key==='signal' ? 'Prompt 必須要求 AI 回傳 JSON，且包含 <b>top</b>、<b>weak</b>、<b>strategy</b> 三個欄位' : key==='thermo' ? 'Prompt 輸出格式必須包含「🔥 市場溫度：XX度」「📊 市場情緒：」「💰 資金流向：」「⚠️ 風險等級：」「🎯 結論：」，否則溫度計無法解析' : 'Prompt 必須要求 AI 回傳 JSON，且包含 <b>action</b>、<b>reasons</b>、<b>target</b>、<b>stop</b> 四個欄位'}，否則無法正常顯示。</div>` : ''}
     <div style="font-size:11px;color:var(--text3);margin-bottom:10px">花括號變數會自動替換為即時資料，請勿刪除需要的變數</div>
     <textarea id="prompt-textarea" style="flex:1;min-height:320px;max-height:55vh;width:100%;box-sizing:border-box;border:1.5px solid var(--border2);border-radius:10px;padding:12px;font-size:12px;font-family:inherit;line-height:1.7;resize:vertical;background:var(--surface2);color:var(--text)">${current.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
     <div style="display:flex;gap:8px;margin-top:12px">
@@ -1806,19 +1932,6 @@ function resetPromptConfirm(key) {
   const TOOL_NAMES = {kline:'K線AI分析', company:'公司深度分析', dailyTW:'每日台股AI精選', dailyUS:'每日美股AI精選', batchDiag:'持倉AI健診'};
   if (!confirm('確定重置「'+( TOOL_NAMES[key]||key)+'」回預設 Prompt？')) return;
   resetPrompt(key);
-  renderAlert();
-}
-
-function deleteToolCard(key) {
-  try {
-    const hidden = JSON.parse(localStorage.getItem('hiddenTools') || '[]');
-    if (!hidden.includes(key)) { hidden.push(key); localStorage.setItem('hiddenTools', JSON.stringify(hidden)); }
-  } catch {}
-  renderAlert();
-}
-
-function restoreAllTools() {
-  localStorage.removeItem('hiddenTools');
   renderAlert();
 }
 
