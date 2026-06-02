@@ -2573,10 +2573,19 @@ async function openKlineAnalysis(code, name) {
   document.body.appendChild(el);
   const contentEl = document.getElementById('kline-modal-content');
   let kl = null;
-  try { const r = await fetch('/api/kline?code='+code, {signal: AbortSignal.timeout(10000)}); if(r.ok) kl = await r.json(); } catch(e) {}
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 15000);
+    const r = await fetch('/api/kline?code='+code, {signal: ctrl.signal});
+    clearTimeout(tid);
+    if(r.ok) kl = await r.json();
+  } catch(e) { console.log('kline fetch error:', e); }
   const p = typeof gP === 'function' ? gP(code) : null;
   const today = new Date().toLocaleDateString('zh-TW');
-  if (!kl || !kl.ok) { contentEl.innerHTML = '<div style="color:var(--text3)">⚠️ K線資料抓取失敗</div>'; return; }
+  if (!kl || !kl.ok) {
+    contentEl.innerHTML = '<div style="color:var(--text3)">⚠️ K線資料抓取失敗<br><span style="font-size:11px">code:'+code+' ok:'+(kl?kl.ok:'null')+' error:'+(kl?kl.error||'—':'no response')+'</span></div>';
+    return;
+  }
   contentEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text3)">🤖 AI 分析中...</div>';
   const kStr = name+'('+code+') 60日技術指標\n現價$'+kl.latest+' 今日'+(p?(p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%':'—')+'\n60日趨勢'+(kl.trend60>=0?'+':'')+kl.trend60+'% 高$'+kl.high60+' 低$'+kl.low60+'\nMA5$'+(kl.ma5||'—')+' MA10$'+(kl.ma10||'—')+' MA20$'+(kl.ma20||'—')+' MA60$'+(kl.ma60||'—')+'\n均線排列：'+(kl.maArrangement||'—')+'\n布林通道：'+(kl.bbSignal||'—')+'\nRSI:'+kl.rsi+' → '+(kl.rsiSignal||'—')+'\nKD：'+(kl.kdSignal||'—')+'\nMACD DIF:'+kl.dif+' MACD:'+kl.macdLine+' BAR:'+kl.bar+' → '+(kl.macdSignal||'—')+'\nBIAS/MA20：'+(kl.biasSignal||'—')+'\n量價：量比'+kl.volRatio+'x → '+(kl.volPriceSignal||'—');
   const prompt = '你是資深技術分析師，精通葛蘭碧八大法則。今天是'+today+'。\n\n'+kStr+'\n\n請分析：\n【1.均線系統（葛蘭碧法則）】排列狀態、現價位置、符合哪條法則\n【2.動能指標】RSI、KD、MACD狀態\n【3.布林通道+乖離率】位置與波動\n【4.量價關係】量能訊號\n【5.K線評分 0~100】給分並說明\n【6.關鍵價位】第一支撐、第二支撐、停損位、翻多價位、目標價\n繁體中文，適合手機閱讀。';
