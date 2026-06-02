@@ -792,7 +792,12 @@ function renderHome() {
         if (stEl  && d.strategy) stEl.innerHTML   = d.strategy.map(t=>'<div>✓ '+t+'</div>').join('');
       } catch(e) {
         var stEl2 = document.getElementById('today-strategy');
-        if (stEl2) stEl2.textContent = text.slice(0,80);
+        var topEl2 = document.getElementById('top-sectors');
+        var wkEl2  = document.getElementById('weak-sectors');
+        // 顯示原始 AI 回應，方便除錯（prompt 格式不符時）
+        if (stEl2)  stEl2.innerHTML  = '<span style="font-size:10px;opacity:.8">⚠️ 格式錯誤，原始回應：<br>'+text.slice(0,120)+'</span>';
+        if (topEl2) topEl2.innerHTML = '<span style="opacity:.6">—</span>';
+        if (wkEl2)  wkEl2.innerHTML  = '<span style="opacity:.6">—</span>';
       }
     });
   }, 500);
@@ -1723,7 +1728,14 @@ function renderAlert() {
 }
 
 function openPromptEditor(key) {
-  const TOOL_NAMES = {kline:'📈 K線AI分析', company:'🏢 公司深度分析', dailyTW:'🇹🇼 每日台股AI精選', dailyUS:'🇺🇸 每日美股AI精選', batchDiag:'🤖 持倉AI健診'};
+  const TOOL_NAMES = {
+    signal:'🌅 明日台股燈號', framework:'📋 每日AI報告框架',
+    kline:'📈 K線AI分析', company:'🏢 公司深度分析',
+    dailyTW:'🇹🇼 每日台股AI精選', dailyUS:'🇺🇸 每日美股AI精選',
+    batchDiag:'🤖 持倉AI健診', opening:'🌄 明日開盤建議',
+    sector:'📊 AI族群趨勢結論', stockPick:'🎯 AI今日選股',
+    indivDiag:'🔬 個股詳細健診', recDiag:'💡 選股深度分析'
+  };
   document.getElementById('prompt-editor-modal')?.remove();
   const el = document.createElement('div');
   el.className = 'overlay'; el.id = 'prompt-editor-modal';
@@ -1731,6 +1743,7 @@ function openPromptEditor(key) {
   el.innerHTML = `<div class="sheet" style="max-height:92vh;display:flex;flex-direction:column">
     <div class="handle"></div>
     <div style="font-size:16px;font-weight:700;margin-bottom:4px">${TOOL_NAMES[key]||key}</div>
+    ${key === 'signal' ? `<div style="font-size:11px;background:#fef9c3;color:#854d0e;border-radius:8px;padding:8px 10px;margin-bottom:8px;line-height:1.6">⚠️ 此 Prompt 必須要求 AI 回傳 JSON 格式，且包含 <b>top</b>（最強族群陣列）、<b>weak</b>（最弱族群陣列）、<b>strategy</b>（策略陣列）三個欄位，否則燈號無法顯示。</div>` : ''}
     <div style="font-size:11px;color:var(--text3);margin-bottom:10px">花括號變數會自動替換為即時資料，請勿刪除需要的變數</div>
     <textarea id="prompt-textarea" style="flex:1;min-height:320px;max-height:55vh;width:100%;box-sizing:border-box;border:1.5px solid var(--border2);border-radius:10px;padding:12px;font-size:12px;font-family:inherit;line-height:1.7;resize:vertical;background:var(--surface2);color:var(--text)">${current.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
     <div style="display:flex;gap:8px;margin-top:12px">
@@ -1759,9 +1772,18 @@ function savePromptFromEditor(key) {
   // 顯示儲存成功提示
   const toast = document.createElement('div');
   toast.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:9999;pointer-events:none';
-  toast.textContent = '✅ Prompt 已儲存';
+  // signal/framework 修改後提示可以回總覽重新觸發
+  if (key === 'signal' || key === 'framework') {
+    toast.textContent = '✅ 已儲存！回總覽頁重新整理即可生效';
+    toast.style.maxWidth = '320px';
+    toast.style.textAlign = 'center';
+    toast.style.whiteSpace = 'normal';
+    toast.style.lineHeight = '1.5';
+  } else {
+    toast.textContent = '✅ Prompt 已儲存';
+  }
   document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 2000);
+  setTimeout(() => toast.remove(), 3000);
 }
 
 function resetPromptConfirm(key) {
