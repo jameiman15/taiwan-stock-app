@@ -544,7 +544,47 @@ function stockCard(s, clickable=true, showDelete=false) {
         </div>
       </div>
     </div>
+    <div id="ai-suggest-${s.code}" style="margin-top:8px;padding:8px 10px;background:var(--surface2);border-radius:8px;font-size:12px;display:none">
+      <span style="color:var(--text3)">⏳ AI建議載入中...</span>
+    </div>
   </div>`;
+}
+
+// 觸發持倉卡片 AI 快速建議
+function loadStockAISuggest(code, name, cost, qty) {
+  const el = document.getElementById('ai-suggest-'+code);
+  if (!el || el.dataset.loaded) return;
+  el.dataset.loaded = '1';
+  el.style.display = 'block';
+  const p = gP(code);
+  if (!p) { el.innerHTML = '<span style="color:var(--text3)">股價載入中</span>'; return; }
+  const roi = ((p.price - cost) / cost * 100).toFixed(1);
+  const taiex = gP('TAIEX'), sox = gP('^SOX');
+  const prompt = '台股分析師快速評估，只回JSON：\n'
+    +'股票：'+name+'('+code+') 成本$'+cost+' 現價$'+p.price.toFixed(0)+' 損益'+roi+'%\n'
+    +'大盤：加權'+(taiex?(taiex.changePct>=0?'+':'')+taiex.changePct.toFixed(2)+'%':'—')+' 費半'+(sox?(sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%':'—')+'\n\n'
+    +'請回JSON：{"action":"續抱或加碼或減碼或停損","reasons":["理由1","理由2","理由3"],"target":目標價數字,"stop":停損價數字}\n只回JSON，不要其他文字。';
+  callAI(prompt, function(text) {
+    try {
+      var d = JSON.parse(text.replace(/```json|```/g,'').trim());
+      var actionColor = d.action==='加碼'?'#16a34a':d.action==='停損'?'#dc2626':d.action==='減碼'?'#d97706':'#2563eb';
+      var reasonsHtml = (d.reasons||[]).map(r=>'<div style="color:var(--text2)">✓ '+r+'</div>').join('');
+      el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+        +'<div style="flex:1">'
+        +'<div style="font-weight:700;margin-bottom:4px">🤖 AI建議：<span style="color:'+actionColor+'">'+d.action+'</span></div>'
+        +reasonsHtml
+        +'</div>'
+        +'<div style="text-align:right;flex-shrink:0">'
+        +(d.target?'<div style="font-size:11px;color:var(--text3)">目標</div><div style="font-size:13px;font-weight:700;color:#16a34a">$'+d.target+'</div>':'')
+        +(d.stop?'<div style="font-size:11px;color:var(--text3);margin-top:2px">停損</div><div style="font-size:13px;font-weight:700;color:#dc2626">$'+d.stop+'</div>':'')
+        +'</div>'
+        +'</div>';
+    } catch(e) {
+      el.innerHTML = '<div style="color:var(--text2);font-size:11px">'+text.slice(0,80)+'</div>';
+    }
+  }, function() {
+    el.style.display = 'none';
+  });
 }
 
 function checkAlerts() {
@@ -614,10 +654,44 @@ function renderHome() {
       ${idx('台積電',tsmc,'2330')}
       ${idx('台指期夜盤',txf,'TXF')}
     </div>
-    <div class="op-card">
-      <div class="op-lbl">🌅 明日開盤建議 · ${(() => { const t=new Date(); const next=new Date(t); next.setDate(t.getDate()+1); return (next.getMonth()+1)+'月'+next.getDate()+'日'; })()}</div>
-      <div class="op-v" id="op-v">${opening.v}</div>
-      <div class="op-r" id="op-r">${opening.r}</div>
+    <div class="op-card" style="padding:0">
+      <!-- 台股燈號區塊 -->
+      <div style="display:flex;align-items:stretch;min-height:80px">
+        <div id="signal-light" style="width:6px;border-radius:10px 0 0 10px;background:#22c55e;flex-shrink:0"></div>
+        <div style="flex:1;padding:14px 16px 10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.6);letter-spacing:.5px">🌅 明日台股燈號</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.5)">${(() => { const t=new Date(); const next=new Date(t); next.setDate(t.getDate()+1); return (next.getMonth()+1)+'月'+next.getDate()+'日'; })()}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <div id="signal-badge" style="font-size:16px;font-weight:800;background:rgba(255,255,255,.15);padding:4px 12px;border-radius:20px">🟢 偏多</div>
+            <div style="display:flex;gap:8px">
+              <div style="text-align:center">
+                <div style="font-size:18px;font-weight:800;font-family:'Space Mono',monospace" id="open-prob">—%</div>
+                <div style="font-size:9px;color:rgba(255,255,255,.6);margin-top:1px">開高機率</div>
+              </div>
+              <div style="text-align:center">
+                <div style="font-size:18px;font-weight:800;font-family:'Space Mono',monospace" id="red-prob">—%</div>
+                <div style="font-size:9px;color:rgba(255,255,255,.6);margin-top:1px">收紅機率</div>
+              </div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+            <div style="background:rgba(255,255,255,.1);border-radius:8px;padding:8px 10px">
+              <div style="font-size:9px;color:rgba(255,255,255,.6);margin-bottom:4px;font-weight:600">🚀 最強族群</div>
+              <div id="top-sectors" style="font-size:11px;font-weight:600;line-height:1.7">⏳ 分析中...</div>
+            </div>
+            <div style="background:rgba(255,255,255,.1);border-radius:8px;padding:8px 10px">
+              <div style="font-size:9px;color:rgba(255,255,255,.6);margin-bottom:4px;font-weight:600">⚠️ 最弱族群</div>
+              <div id="weak-sectors" style="font-size:11px;font-weight:600;line-height:1.7">⏳ 分析中...</div>
+            </div>
+          </div>
+          <div style="background:rgba(255,255,255,.1);border-radius:8px;padding:8px 10px">
+            <div style="font-size:9px;color:rgba(255,255,255,.6);margin-bottom:4px;font-weight:600">💡 今日策略</div>
+            <div id="today-strategy" style="font-size:11px;font-weight:600;line-height:1.7">⏳ AI 分析中...</div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="sg">
       <div class="sc"><div class="sc-l">帳戶市值</div><div class="sc-v" style="font-size:13px;">NT$${Math.round(tv).toLocaleString()}</div></div>
@@ -676,29 +750,49 @@ function renderHome() {
     })()}
   `;
 
-  // API 即時更新明日開盤建議
+  // ── 台股燈號 AI 分析 ──────────────────────────────────────────
   setTimeout(function() {
     if (!sp500 && !taiex) return;
     var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
     var tomorrowStr = (tomorrow.getMonth()+1)+'月'+tomorrow.getDate()+'日';
-    const opPrompt = '你是台股分析師，請給出'+tomorrowStr+'台股開盤建議（繁體中文，直接給結論，2-3句）：\n'
-      + 'S&P500：'+(sp500?(sp500.changePct>=0?'+':'')+sp500.changePct.toFixed(2)+'%':'—')+'\n'
-      + '那斯達克：'+(nasdaq?(nasdaq.changePct>=0?'+':'')+nasdaq.changePct.toFixed(2)+'%':'—')+'\n'
-      + '費半：'+(sox?(sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%':'—')+'\n'
-      + '台積電ADR：'+(tsm?(tsm.changePct>=0?'+':'')+tsm.changePct.toFixed(2)+'%':'—')+'\n'
-      + '加權指數：'+(taiex?(taiex.changePct>=0?'+':'')+taiex.changePct.toFixed(2)+'%':'—')+'\n\n'
-      + '格式：第一句整體趨勢判斷，第二句哪些族群可布局，第三句風險提示。';
-    callAI(opPrompt, function(text) {
-      var vEl = document.getElementById('op-v');
-      var rEl = document.getElementById('op-r');
-      if (!vEl || !rEl) return;
-      var lines = text.trim().split('\n').filter(Boolean);
-      if (lines.length >= 2) {
-        vEl.textContent = lines[0];
-        rEl.textContent = lines.slice(1).join(' ');
-      } else {
-        vEl.textContent = text.length > 20 ? text.slice(0,20) : text;
-        rEl.textContent = text;
+
+    // 靜態機率計算
+    var spPct  = sp500?.changePct  || 0;
+    var soxPct = sox?.changePct    || 0;
+    var tsmPct = tsm?.changePct    || 0;
+    var score  = spPct*0.4 + soxPct*0.35 + tsmPct*0.25;
+    var openP  = Math.min(85, Math.max(20, Math.round(55 + score*8)));
+    var redP   = Math.min(82, Math.max(18, Math.round(52 + score*7)));
+
+    var opEl = document.getElementById('open-prob');
+    var rdEl = document.getElementById('red-prob');
+    var lgEl = document.getElementById('signal-light');
+    var bgEl = document.getElementById('signal-badge');
+    if (opEl) opEl.textContent = openP + '%';
+    if (rdEl) rdEl.textContent = redP + '%';
+    if (lgEl && bgEl) {
+      if (score > 0.5)       { lgEl.style.background='#22c55e'; bgEl.textContent='🟢 偏多'; }
+      else if (score > 0)    { lgEl.style.background='#86efac'; bgEl.textContent='🟡 中性偏多'; }
+      else if (score > -0.5) { lgEl.style.background='#fbbf24'; bgEl.textContent='🟡 中性偏空'; }
+      else                   { lgEl.style.background='#ef4444'; bgEl.textContent='🔴 偏空'; }
+    }
+
+    // AI 生成族群 + 策略
+    var mktData = 'S&P500:'+(spPct>=0?'+':'')+spPct.toFixed(2)+'% 費半:'+(soxPct>=0?'+':'')+soxPct.toFixed(2)+'% 台積電ADR:'+(tsmPct>=0?'+':'')+tsmPct.toFixed(2)+'% 加權:'+(taiex?(taiex.changePct>=0?'+':'')+taiex.changePct.toFixed(2)+'%':'—');
+    var sigPrompt = '今天是'+tomorrowStr+'，台股明日開盤預測。市場數據：'+mktData+'\n\n請只回JSON，格式：\n{"top":["族群1","族群2","族群3"],"weak":["族群1","族群2"],"strategy":["策略一","策略二","策略三"]}\n\ntop=最強3族群（2-3字），weak=最弱2族群（2-3字），strategy=今日操作策略3條（5字內每條）。只回JSON不要其他文字。';
+
+    callAI(sigPrompt, function(text) {
+      try {
+        var d = JSON.parse(text.replace(/```json|```/g,'').trim());
+        var topEl = document.getElementById('top-sectors');
+        var wkEl  = document.getElementById('weak-sectors');
+        var stEl  = document.getElementById('today-strategy');
+        if (topEl && d.top)      topEl.innerHTML  = d.top.map((t,i)=>'<div>'+['①','②','③'][i]+' '+t+'</div>').join('');
+        if (wkEl  && d.weak)     wkEl.innerHTML   = d.weak.map((t,i)=>'<div>'+['①','②'][i]+' '+t+'</div>').join('');
+        if (stEl  && d.strategy) stEl.innerHTML   = d.strategy.map(t=>'<div>✓ '+t+'</div>').join('');
+      } catch(e) {
+        var stEl2 = document.getElementById('today-strategy');
+        if (stEl2) stEl2.textContent = text.slice(0,80);
       }
     });
   }, 500);
@@ -772,6 +866,16 @@ function renderPortfolio() {
       </div>`;
     }).join('') : '<div style="color:var(--text3);font-size:13px;padding:8px 0">尚無基金</div>'}
     <div style="height:20px"></div>`;
+
+  // 延遲觸發每張股票卡的 AI 快速建議（避免一次太多請求）
+  setTimeout(function() {
+    const allStocks = [...(acc.stocks||[])];
+    allStocks.forEach(function(s, i) {
+      setTimeout(function() {
+        loadStockAISuggest(s.code, s.name, s.cost, s.qty);
+      }, i * 800); // 每隔800ms觸發一張，避免同時送太多請求
+    });
+  }, 300);
 }
 
 function runBatchDiag() {
