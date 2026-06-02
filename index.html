@@ -824,6 +824,165 @@ function runBatchDiag() {
   });
 }
 
+// ── K線AI分析 Modal ────────────────────────────────────────────────
+async function openKlineAnalysis(code, name) {
+  document.getElementById('kline-modal')?.remove();
+  const el = document.createElement('div');
+  el.className = 'overlay'; el.id = 'kline-modal';
+  el.innerHTML = `<div class="sheet" style="max-height:88vh;overflow-y:auto">
+    <div class="handle"></div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:2px">📈 K線AI分析</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px">${name}（${code}）· 60日技術指標</div>
+    <div id="kline-modal-content" style="font-size:13px;line-height:1.9;color:var(--text)">
+      <div style="text-align:center;padding:24px;color:var(--text3)">⏳ 抓取K線資料中...</div>
+    </div>
+    <button class="btn-o" style="margin-top:16px" onclick="document.getElementById('kline-modal').remove()">關閉</button>
+  </div>`;
+  el.addEventListener('click', e => { if(e.target===el) el.remove(); });
+  document.body.appendChild(el);
+  const contentEl = document.getElementById('kline-modal-content');
+  let kl = null;
+  try {
+    const r = await fetch('/api/kline?code='+code, {signal: AbortSignal.timeout(10000)});
+    if (r.ok) kl = await r.json();
+  } catch(e) {}
+  const p = gP(code);
+  const today = new Date().toLocaleDateString('zh-TW');
+  if (!kl || !kl.ok) {
+    contentEl.innerHTML = '<div style="color:var(--text3)">⚠️ K線資料抓取失敗，請稍後重試</div>';
+    return;
+  }
+  contentEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text3)">🤖 AI 分析中，約需10秒...</div>';
+  const kStr = name+'（'+code+'）60日K線技術指標\n'
+    +'現價：$'+kl.latest+' 今日：'+(p?(p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%':'—')+'\n'
+    +'60日趨勢：'+(kl.trend60>=0?'+':'')+kl.trend60+'% 高：$'+kl.high60+' 低：$'+kl.low60+'\n'
+    +'距高點：'+((kl.latest-kl.high60)/kl.high60*100).toFixed(1)+'% 距低點：+'+((kl.latest-kl.low60)/kl.low60*100).toFixed(1)+'%\n\n'
+    +'MA5:$'+(kl.ma5||'—')+' MA10:$'+(kl.ma10||'—')+' MA20:$'+(kl.ma20||'—')+' MA60:$'+(kl.ma60||'—')+'\n'
+    +'均線排列：'+(kl.maArrangement||'—')+'\n\n'
+    +'布林通道：'+(kl.bbSignal||'—')+'\n\n'
+    +'RSI(14)：'+kl.rsi+' → '+(kl.rsiSignal||'—')+'\n\n'
+    +'KD：'+(kl.kdSignal||'—')+'\n\n'
+    +'MACD DIF:'+kl.dif+' MACD:'+kl.macdLine+' BAR:'+kl.bar+' → '+(kl.macdSignal||'—')+'\n\n'
+    +'BIAS/MA20：'+(kl.biasSignal||'—')+'\n\n'
+    +'量價關係：量比'+kl.volRatio+'x → '+(kl.volPriceSignal||'—');
+
+  const prompt = '你是一位資深技術分析師，擁有20年台股實戰經驗，精通葛蘭碧八大法則、均線系統、動能指標與量價關係。\n'
+    +'今天是'+today+'。以下是'+name+'（'+code+'）的60日K線完整技術數據：\n\n'
+    +kStr+'\n\n'
+    +'請按以下架構分析：\n\n'
+    +'【1. 均線系統分析（葛蘭碧法則）】\n'
+    +'- 均線排列狀態（多頭/空頭/糾結）\n'
+    +'- 現價與各均線位置關係\n'
+    +'- 依葛蘭碧法則，目前符合哪條？買進/賣出信號？\n'
+    +'- 短中長期趨勢判斷\n\n'
+    +'【2. 動能指標分析】\n'
+    +'- RSI：超買/超賣/中性\n'
+    +'- KD：狀態，有無黃金/死亡交叉\n'
+    +'- MACD：多空方向，柱狀體動向，有無交叉訊號\n\n'
+    +'【3. 布林通道 + 乖離率】\n'
+    +'- 現價在通道位置，波動狀態，乖離是否過大\n\n'
+    +'【4. 量價關係】\n'
+    +'- 量能訊號解讀，是否支撐趨勢\n\n'
+    +'【5. 綜合K線評分（0~100）】\n'
+    +'80~100強勢多頭 / 60~79偏多可分批 / 40~59中性觀望 / 20~39偏空謹慎 / 0~19弱勢避免\n'
+    +'給出評分並說明理由\n\n'
+    +'【6. 關鍵價位】\n'
+    +'- 第一支撐位、第二支撐位\n'
+    +'- 停損位（跌破即停損）\n'
+    +'- 翻多價位（突破轉多方信號）\n'
+    +'- 目標價位\n\n'
+    +'請用繁體中文，格式清晰，適合手機閱讀。';
+
+  try {
+    const r = await fetch('/api/claude', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({prompt, max_tokens: 1500}),
+      signal: AbortSignal.timeout(45000)
+    });
+    const d = await r.json();
+    if (d.ok && d.text) {
+      contentEl.innerHTML = '<div style="white-space:pre-wrap">'+d.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+    } else {
+      contentEl.innerHTML = '<div style="color:var(--text3)">分析失敗：'+(d.error||'未知錯誤')+'</div>';
+    }
+  } catch(e) { contentEl.innerHTML = '<div style="color:var(--text3)">請求失敗，請稍後重試</div>'; }
+}
+
+// ── 公司深度分析 Modal ────────────────────────────────────────────
+async function openCompanyAnalysis(code, name) {
+  document.getElementById('company-modal')?.remove();
+  const el = document.createElement('div');
+  el.className = 'overlay'; el.id = 'company-modal';
+  el.innerHTML = `<div class="sheet" style="max-height:88vh;overflow-y:auto">
+    <div class="handle"></div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:2px">🏢 公司深度分析</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px">${name}（${code}）· 綜合投資報告</div>
+    <div id="company-modal-content" style="font-size:13px;line-height:1.9;color:var(--text)">
+      <div style="text-align:center;padding:24px;color:var(--text3)">⏳ AI 深度分析中，約需20秒...</div>
+    </div>
+    <button class="btn-o" style="margin-top:16px" onclick="document.getElementById('company-modal').remove()">關閉</button>
+  </div>`;
+  el.addEventListener('click', e => { if(e.target===el) el.remove(); });
+  document.body.appendChild(el);
+  const contentEl = document.getElementById('company-modal-content');
+  const p = gP(code);
+  const today = new Date().toLocaleDateString('zh-TW');
+  const priceInfo = p ? '今日股價：$'+p.price.toFixed(0)+'（'+(p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%）' : '股價資料載入中';
+
+  const prompt = '扮演一位資深股票研究分析師。今天是'+today+'。\n'
+    +name+'（'+code+'）'+priceInfo+'\n\n'
+    +'請編寫一份綜合投資分析報告，詳細、客觀且以數據為導向，使用過去五個完整財政年度和TTM數據：\n\n'
+    +'【1. 執行摘要】\n'
+    +'- 業務概述（1句）\n'
+    +'- 整體投資論點（2-3句）\n'
+    +'- 目前估值：買入/持有/賣出？\n'
+    +'- 主要催化劑和主要風險\n\n'
+    +'【2. 財務表現與健康狀況】\n'
+    +'- 損益表：5年+TTM營收成長、毛利率、營業利潤率、淨利率趨勢\n'
+    +'- 資產負債表：債務水平、D/E比、流動比率、現金狀況\n'
+    +'- 現金流：營業CF、資本支出、FCF，是否持續FCF為正\n\n'
+    +'【3. 估值分析】\n'
+    +'- 本益比、P/S、P/B、EV/EBITDA\n'
+    +'- 對比5年歷史均值與產業平均\n'
+    +'- 對比前3名直接競爭對手\n'
+    +'- 結論：高估/低估/合理\n\n'
+    +'【4. 商業模式與競爭護城河】\n'
+    +'- 核心業務部門及營收貢獻\n'
+    +'- 競爭優勢來源（品牌、專利、網絡效應、成本領先）\n'
+    +'- 護城河耐久性評估\n\n'
+    +'【5. 成長策略與未來展望】\n'
+    +'- 主要成長催化劑（新產品、市場擴張、產業趨勢）\n'
+    +'- TAM市場機會與市佔率潛力\n\n'
+    +'【6. 管理與治理】\n'
+    +'- CEO與高管團隊（任期、業績記錄）\n'
+    +'- 資本配置（股息、回購、M&A）\n'
+    +'- 內部人持股水平\n\n'
+    +'【7. 風險分析】\n'
+    +'- 公司特有風險（前3大）\n'
+    +'- 系統性外部風險（前3大）\n\n'
+    +'【8. 最終建議】\n'
+    +'- 買入/持有/賣出 + 理由\n'
+    +'- 目標價位區間\n'
+    +'- 主要觀察指標\n\n'
+    +'請用繁體中文，格式清晰，數據導向，適合手機閱讀。';
+
+  try {
+    const r = await fetch('/api/claude', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({prompt, max_tokens: 2000}),
+      signal: AbortSignal.timeout(60000)
+    });
+    const d = await r.json();
+    if (d.ok && d.text) {
+      contentEl.innerHTML = '<div style="white-space:pre-wrap">'+d.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+    } else {
+      contentEl.innerHTML = '<div style="color:var(--text3)">分析失敗：'+(d.error||'未知錯誤')+'</div>';
+    }
+  } catch(e) { contentEl.innerHTML = '<div style="color:var(--text3)">請求失敗，請稍後重試</div>'; }
+}
+
 async function openDailyReport() {
   // 建立報告 overlay
   document.getElementById('daily-report-modal')?.remove();
@@ -1159,7 +1318,19 @@ function renderAI() {
       const cardId = 'diag-card-'+si;
       return `<div class="card ${am[dynD.a]||''}" id="${cardId}">
         <div class="sr"><div class="sl"><h3>${s.name}</h3><span id="diag-tag-${si}">${tagH(dynD.a)}</span></div>
-          <div class="sr-r"><div class="price">${p?'$'+fmtN(p.price):'---'}</div></div>
+          <div class="sr-r">
+            <div class="price">${p?'$'+fmtN(p.price):'---'}</div>
+            <div style="display:flex;gap:5px;margin-top:6px;justify-content:flex-end">
+              <button onclick="openKlineAnalysis('${s.code}','${s.name}')" title="K線AI分析"
+                style="font-size:10px;padding:3px 8px;border-radius:7px;border:1.5px solid var(--accent);color:var(--accent);background:transparent;cursor:pointer;font-weight:700;font-family:inherit;white-space:nowrap">
+                📈 K線
+              </button>
+              <button onclick="openCompanyAnalysis('${s.code}','${s.name}')" title="公司深度分析"
+                style="font-size:10px;padding:3px 8px;border-radius:7px;border:1.5px solid var(--text3);color:var(--text2);background:transparent;cursor:pointer;font-weight:700;font-family:inherit;white-space:nowrap">
+                🏢 公司
+              </button>
+            </div>
+          </div>
         </div>
         <div id="diag-text-${si}" style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.7">
           <span style="color:var(--text3);font-size:11px">尚未分析</span>
