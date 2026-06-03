@@ -877,8 +877,7 @@ function renderHome() {
       var risk = riskMatch ? riskMatch[1].trim() : '—';
 
       // 解析結論
-      var conclusionMatch = text.match(/結論[：:]\s*([\s\S]+?)(?:
-|$)/);
+      var conclusionMatch = text.match(/結論[：:]\s*([^\n]+)/);
       var conclusion = conclusionMatch ? conclusionMatch[1].trim() : '—';
 
       // 顏色判斷
