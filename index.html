@@ -662,8 +662,7 @@ function renderHome() {
         <div id="signal-light" style="width:6px;border-radius:10px 0 0 10px;background:#22c55e;flex-shrink:0"></div>
         <div style="flex:1;padding:14px 16px 10px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.6);letter-spacing:.5px">🌅 明日台股燈號</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.5)">${(() => { const t=new Date(); const next=new Date(t); next.setDate(t.getDate()+1); return (next.getMonth()+1)+'月'+next.getDate()+'日'; })()}</div>
+            <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.6);letter-spacing:.5px">🌅 ${(() => { const t=new Date(); const h=t.getHours(),m=t.getMinutes(); const next=new Date(t); if(h>21||(h===21&&m>=30)) next.setDate(t.getDate()+1); return next.getFullYear()+'年'+(next.getMonth()+1)+'月'+next.getDate()+'日'; })()}台股燈號</div>
           </div>
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
             <div id="signal-badge" style="font-size:16px;font-weight:800;background:rgba(255,255,255,.15);padding:4px 12px;border-radius:20px">🟢 偏多</div>
@@ -788,8 +787,9 @@ function renderHome() {
   // ── 台股燈號 AI 分析 ──────────────────────────────────────────
   setTimeout(function() {
     if (!sp500 && !taiex) return;
-    var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
-    var tomorrowStr = (tomorrow.getMonth()+1)+'月'+tomorrow.getDate()+'日';
+    var tomorrow = new Date();
+    var _h=tomorrow.getHours(),_m=tomorrow.getMinutes(); if(_h>21||(_h===21&&_m>=30)) tomorrow.setDate(tomorrow.getDate()+1);
+    var tomorrowStr = tomorrow.getFullYear()+'年'+(tomorrow.getMonth()+1)+'月'+tomorrow.getDate()+'日';
 
     // 靜態機率計算
     var spPct  = sp500?.changePct  || 0;
