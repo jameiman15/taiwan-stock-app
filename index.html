@@ -1558,15 +1558,14 @@ async function renderNews() {
     }).join('');
   } catch(e) {
     if (nEl) nEl.innerHTML =
-      '<div style="font-size:11px;color:var(--text3);padding:8px 12px;background:var(--surface2);border-radius:8px;margin-bottom:8px">⚠️ 即時新聞抓取失敗，以下為 AI 彙整，非即時資訊</div>' +
-      NEWS.map(n => {
-        const inner = '<div class="ni-s">'+n.src+' <span class="chip">'+n.tag+'</span></div>'
-          +'<div class="ni-t">'+n.t+'</div>'
-          +'<div class="ni-time">'+n.tm+'</div>';
-        return n.url
-          ? '<a href="'+n.url+'" target="_blank" rel="noopener" style="display:block;text-decoration:none;color:inherit;border-bottom:1px solid var(--border)" class="ni">'+inner+'<div style="font-size:11px;color:var(--blue);margin-top:2px">閱讀完整新聞 →</div></a>'
-          : '<div class="ni">'+inner+'</div>';
-      }).join('');
+      '<div style="text-align:center;padding:32px 16px;color:var(--text3)">'
+      +'<div style="font-size:28px;margin-bottom:10px">📡</div>'
+      +'<div style="font-size:13px;font-weight:600;margin-bottom:6px">新聞載入失敗</div>'
+      +'<div style="font-size:11px;line-height:1.6">請檢查網路連線後重新整理<br>或直接前往新聞網站查看</div>'
+      +'<div style="display:flex;flex-direction:column;gap:8px;margin-top:16px">'
+      +'<a href="https://news.cnyes.com/news/cat/tw_stock" target="_blank" style="padding:8px 16px;background:var(--surface2);border-radius:8px;text-decoration:none;color:var(--text);font-size:12px;font-weight:600">🇹🇼 鉅亨網台股新聞</a>'
+      +'<a href="https://finance.yahoo.com/topic/stock-market-news/" target="_blank" style="padding:8px 16px;background:var(--surface2);border-radius:8px;text-decoration:none;color:var(--text);font-size:12px;font-weight:600">🇺🇸 Yahoo Finance News</a>'
+      +'</div></div>';
   }
 }
 
