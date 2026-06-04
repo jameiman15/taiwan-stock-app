@@ -275,13 +275,13 @@ const AI_RECS = [
 ];
 
 const NEWS = [
-  {src:'🇹🇼 工商時報',t:'台積電CoWoS訂單超預期，2026年產能已提前售罄',tm:'1小時前',tag:'台股'},
-  {src:'🇺🇸 Reuters',  t:'Fed officials signal September rate cut still possible despite mixed data',tm:'2小時前',tag:'美股'},
-  {src:'🇹🇼 經濟日報',t:'聯發科天璣旗艦晶片市佔攀升，Q3法說指引超預期',tm:'3小時前',tag:'台股'},
-  {src:'🇺🇸 Bloomberg',t:'Nvidia smashes estimates again as AI demand shows no sign of slowdown',tm:'4小時前',tag:'美股'},
-  {src:'🇹🇼 MoneyDJ', t:'ETF存股潮持續，00878受益人數突破120萬人創新高',tm:'5小時前',tag:'ETF'},
-  {src:'🇺🇸 WSJ',     t:'Taiwan chip stocks surge to record highs on AI infrastructure boom',tm:'6小時前',tag:'外資'},
-  {src:'🇹🇼 鉅亨網',  t:'外資連續10日買超台股，資金持續流入半導體族群',tm:'7小時前',tag:'外資'},
+  {src:'🇹🇼 工商時報',t:'台積電CoWoS訂單超預期，2026年產能已提前售罄',tm:'1小時前',tag:'台股',url:'https://ctee.com.tw/news/tech.html'},
+  {src:'🇺🇸 Reuters',  t:'Fed officials signal September rate cut still possible despite mixed data',tm:'2小時前',tag:'美股',url:'https://www.reuters.com/markets/'},
+  {src:'🇹🇼 經濟日報',t:'聯發科天璣旗艦晶片市佔攀升，Q3法說指引超預期',tm:'3小時前',tag:'台股',url:'https://money.udn.com/money/cate/5612'},
+  {src:'🇺🇸 Bloomberg',t:'Nvidia smashes estimates again as AI demand shows no sign of slowdown',tm:'4小時前',tag:'美股',url:'https://www.bloomberg.com/technology'},
+  {src:'🇹🇼 MoneyDJ', t:'ETF存股潮持續，00878受益人數突破120萬人創新高',tm:'5小時前',tag:'ETF',url:'https://www.moneydj.com/ETF/'},
+  {src:'🇺🇸 WSJ',     t:'Taiwan chip stocks surge to record highs on AI infrastructure boom',tm:'6小時前',tag:'外資',url:'https://www.wsj.com/finance'},
+  {src:'🇹🇼 鉅亨網',  t:'外資連續10日買超台股，資金持續流入半導體族群',tm:'7小時前',tag:'外資',url:'https://news.cnyes.com/news/cat/tw_stock'},
 ];
 
 // ─── SUPABASE 同步 ─────────────────────────────────────────
@@ -818,7 +818,11 @@ function renderHome() {
 
     callAI(sigPrompt, function(text) {
       try {
-        var d = JSON.parse(text.replace(/```json|```/g,'').trim());
+        // 更強的 JSON 清理：只取第一個 { ... } 區塊
+        var jsonStr = text.replace(/```json|```/g,'').trim();
+        var jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('no json');
+        var d = JSON.parse(jsonMatch[0]);
         var topEl = document.getElementById('top-sectors');
         var wkEl  = document.getElementById('weak-sectors');
         var stEl  = document.getElementById('today-strategy');
@@ -826,11 +830,10 @@ function renderHome() {
         if (wkEl  && d.weak)     wkEl.innerHTML   = d.weak.map((t,i)=>'<div>'+['①','②'][i]+' '+t+'</div>').join('');
         if (stEl  && d.strategy) stEl.innerHTML   = d.strategy.map(t=>'<div>✓ '+t+'</div>').join('');
       } catch(e) {
-        var stEl2 = document.getElementById('today-strategy');
+        var stEl2  = document.getElementById('today-strategy');
         var topEl2 = document.getElementById('top-sectors');
         var wkEl2  = document.getElementById('weak-sectors');
-        // 顯示原始 AI 回應，方便除錯（prompt 格式不符時）
-        if (stEl2)  stEl2.innerHTML  = '<span style="font-size:10px;opacity:.8">⚠️ 格式錯誤，原始回應：<br>'+text.slice(0,120)+'</span>';
+        if (stEl2)  stEl2.innerHTML  = '<span style="opacity:.6">⚠️ 分析失敗，請重新整理</span>';
         if (topEl2) topEl2.innerHTML = '<span style="opacity:.6">—</span>';
         if (wkEl2)  wkEl2.innerHTML  = '<span style="opacity:.6">—</span>';
       }
@@ -1554,11 +1557,16 @@ async function renderNews() {
         : '<div class="ni">'+inner+'</div>';
     }).join('');
   } catch(e) {
-    if (nEl) nEl.innerHTML = NEWS.map(n => '<div class="ni">'
-      +'<div class="ni-s">'+n.src+' <span class="chip">'+n.tag+'</span></div>'
-      +'<div class="ni-t">'+n.t+'</div>'
-      +'<div class="ni-time">'+n.tm+'</div>'
-      +'</div>').join('');
+    if (nEl) nEl.innerHTML =
+      '<div style="font-size:11px;color:var(--text3);padding:8px 12px;background:var(--surface2);border-radius:8px;margin-bottom:8px">⚠️ 即時新聞抓取失敗，以下為 AI 彙整，非即時資訊</div>' +
+      NEWS.map(n => {
+        const inner = '<div class="ni-s">'+n.src+' <span class="chip">'+n.tag+'</span></div>'
+          +'<div class="ni-t">'+n.t+'</div>'
+          +'<div class="ni-time">'+n.tm+'</div>';
+        return n.url
+          ? '<a href="'+n.url+'" target="_blank" rel="noopener" style="display:block;text-decoration:none;color:inherit;border-bottom:1px solid var(--border)" class="ni">'+inner+'<div style="font-size:11px;color:var(--blue);margin-top:2px">閱讀完整新聞 →</div></a>'
+          : '<div class="ni">'+inner+'</div>';
+      }).join('');
   }
 }
 
