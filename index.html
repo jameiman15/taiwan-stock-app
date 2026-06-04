@@ -532,7 +532,6 @@ function stockCard(s, clickable=true, showDelete=false) {
       <div class="sl">
         <h3>${s.name} <span style="font-size:11px;font-weight:400;color:var(--text3)">${s.code}</span></h3>
         <div class="meta">${s.qty.toLocaleString()}股 · 成本 $${s.cost}</div>
-        ${tagH(d.a)}
       </div>
       <div class="sr-r" style="${showDelete?'padding-right:80px':''}">
         <div class="price">${priceLine(s.code)}</div>
