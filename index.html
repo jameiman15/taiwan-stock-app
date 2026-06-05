@@ -1484,6 +1484,17 @@ function renderAI() {
       +'g=2(等待5支)：基本面佳但現價偏高，等回測\n'
       +'entry：現價±15%以內，stop：entry的88-95%，target：entry的115-130%\n'
       +'只回JSON陣列，不要任何其他文字。\n';
+var taiexStr = _t ? _t.price?.toLocaleString()+'點('+(_t.changePct>=0?'+':'')+_t.changePct?.toFixed(2)+'%)' : '—';
+    var soxStr   = _s ? (_s.changePct>=0?'+':'')+_s.changePct?.toFixed(2)+'%' : '—';
+    var sp5Str   = _s5? (_s5.changePct>=0?'+':'')+_s5.changePct?.toFixed(2)+'%': '—';
+    var tmcStr   = _tmc? '$'+_tmc.price?.toFixed(0)+'('+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%)': '—';
+    var rPrompt = getPrompt('stockPick')
+      .replace('{today}',      today)
+      .replace('{taiex}',      taiexStr)
+      .replace('{sox}',        soxStr)
+      .replace('{sp500}',      sp5Str)
+      .replace('{tsmc}',       tmcStr)
+      .replace('{knownPrices}',knownPrices || '(無即時個股資料)');
     callAI(rPrompt, function(text) {
       try {
         var clean = text.replace(/```json|```/g,'').trim();
@@ -3418,16 +3429,4 @@ async function openCompanyAnalysis(code, name) {
 
 </script>  
 </body>
-</html>    var taiexStr = _t ? _t.price?.toLocaleString()+'點('+(_t.changePct>=0?'+':'')+_t.changePct?.toFixed(2)+'%)' : '—';
-    var soxStr   = _s ? (_s.changePct>=0?'+':'')+_s.changePct?.toFixed(2)+'%' : '—';
-    var sp5Str   = _s5? (_s5.changePct>=0?'+':'')+_s5.changePct?.toFixed(2)+'%': '—';
-    var tmcStr   = _tmc? '$'+_tmc.price?.toFixed(0)+'('+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%)': '—';
-    var rPrompt = getPrompt('stockPick')
-      .replace('{today}',      today)
-      .replace('{taiex}',      taiexStr)
-      .replace('{sox}',        soxStr)
-      .replace('{sp500}',      sp5Str)
-      .replace('{tsmc}',       tmcStr)
-      .replace('{knownPrices}',knownPrices || '(無即時個股資料)');
-
-
+</html>
