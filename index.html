@@ -837,8 +837,8 @@ function renderHome() {
         if (sectorData.length >= 3) {
           // 排序：強→弱
           sectorData.sort(function(a,b){ return b.pct - a.pct; });
-          var top10  = sectorData.slice(0, 10);
-          var weak10 = sectorData.slice(-10).reverse();
+          var top10  = sectorData.slice(0, 5);
+          var weak10 = sectorData.slice(-5).reverse();
 
           var nums = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
 
@@ -908,8 +908,8 @@ function renderHome() {
                   + '</div>';
               }
 
-              if (topEl && d.top)      topEl.innerHTML  = d.top.slice(0,10).map(function(t,i){return makeSectorRowFromAI(t,i,true);}).join('');
-              if (wkEl  && d.weak)     wkEl.innerHTML   = d.weak.slice(0,10).map(function(t,i){return makeSectorRowFromAI(t,i,false);}).join('');
+              if (topEl && d.top)      topEl.innerHTML  = d.top.slice(0,5).map(function(t,i){return makeSectorRowFromAI(t,i,true);}).join('');
+              if (wkEl  && d.weak)     wkEl.innerHTML   = d.weak.slice(0,5).map(function(t,i){return makeSectorRowFromAI(t,i,false);}).join('');
               if (stEl  && d.strategy) stEl.innerHTML   = d.strategy.map(function(t){return '<div>✓ '+t+'</div>';}).join('');
             } catch(e) {
               console.log('sector AI parse error:', e, 'raw text:', text?.slice(0,200));
@@ -2205,7 +2205,7 @@ function toggleSectorStocks(id) {
   });
 
   if (!stocks.length) {
-    el.innerHTML = sectorCodes.slice(0,10).map(function(code){
+    el.innerHTML = sectorCodes.slice(0,5).map(function(code){
       var db = STOCK_DB.find(function(s){return s.code===code;});
       return '<div style="opacity:.7">' + code + (db?' '+db.name:'') + '</div>';
     }).join('') || '暫無個股資料';
@@ -2213,7 +2213,7 @@ function toggleSectorStocks(id) {
   }
 
   stocks.sort(function(a,b){return b.pct-a.pct;});
-  el.innerHTML = stocks.slice(0,10).map(function(s,i){
+  el.innerHTML = stocks.slice(0,5).map(function(s,i){
     return '<div style="display:flex;justify-content:space-between;padding:1px 0">'
       + '<span>' + (i+1) + '. ' + s.name + ' <span style="opacity:.5">' + s.code + '</span></span>'
       + '<span style="color:' + (s.pct>=0?'#f87171':'#86efac') + ';font-family:monospace">'
