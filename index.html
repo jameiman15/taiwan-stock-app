@@ -1347,29 +1347,65 @@ function renderAI() {
       .filter(function(kv){ return kv[1] && kv[1].price && kv[0].match(/^\d{4,6}$/); })
       .map(function(kv){ return kv[0]+'=$'+kv[1].price.toFixed(0); })
       .slice(0,30).join(' ');
+    // 建立代號→公司業務說明對照表（提供給 AI 作為基本面依據）
+    var bizDesc = {
+      '2330':'台積電－全球最大晶圓代工，CoWoS先進封裝，AI晶片主要製造商',
+      '2454':'聯發科－IC設計龍頭，天璣手機晶片+Wi-Fi/藍牙，車用與AIoT',
+      '2317':'鴻海－全球最大EMS代工，iPhone組裝，電動車MIH平台',
+      '2308':'台達電－電源供應器+散熱模組，AI伺服器電源，工業自動化',
+      '2382':'廣達－雲端伺服器ODM龍頭，輝達AI伺服器主要代工商',
+      '2357':'華碩－PC/NB+主機板，AI PC，ROG電競品牌',
+      '2376':'技嘉－主機板+顯示卡，輝達GPU合作，AI伺服器',
+      '3008':'大立光－全球最高階手機鏡頭，蘋果iPhone主要供應商',
+      '2395':'研華－工業電腦+嵌入式系統，工廠自動化，邊緣AI',
+      '2412':'中華電信－台灣最大電信商，5G+MOD+雲端服務',
+      '2882':'國泰金－台灣最大金控，壽險+銀行+證券，資產管理',
+      '2884':'玉山金－數位金融領先，玉山銀行，網銀+信用卡',
+      '2886':'兆豐金－公股金控，兆豐銀行，貿易融資+外匯',
+      '2891':'中信金－中信銀行，消費金融+信用卡，壽險',
+      '2881':'富邦金－富邦壽險+富邦銀行+台灣大哥大母公司',
+      '6533':'晶心科技－RISC-V處理器IP核心設計，MCU/SoC授權',
+      '4919':'新唐－MCU微控制器製造，8/32位元MCU，工業+消費電子用IC',
+      '6206':'飛捷－POS系統+零售資訊化方案，餐飲/零售IT系統整合商',
+      '2439':'美律－電聲產品製造商，耳機/揚聲器/麥克風，AirPods供應鏈',
+      '2603':'長榮－台灣最大貨櫃航運，全球前五大航運公司',
+      '2615':'萬海－貨櫃航運，亞洲航線為主',
+      '2609':'陽明－台灣第二大航運，台灣政府持股',
+      '3017':'奇鋐－散熱模組龍頭，AI伺服器液冷散熱，CPU散熱器',
+      '6230':'超眾－機殼+散熱，筆電+伺服器散熱解決方案',
+      '6669':'緯穎－白牌雲端伺服器，Meta/微軟直接出貨',
+      '3661':'世芯-KY－ASIC設計服務，客製化AI晶片，輝達合作夥伴',
+      '5274':'信驊－BMC管理晶片，伺服器主機板控制晶片',
+      '2345':'智邦－高速乙太網路交換器，資料中心網通設備',
+      '1101':'台泥－台灣最大水泥，碳捕捉+儲能+電動車充電',
+      '2002':'中鋼－台灣最大鋼鐵，特殊鋼+矽鋼片，電動車用鋼',
+      '1301':'台塑－石化原料，乙烯/聚丙烯，轉型綠色化學',
+      '00878':'國泰永續高股息ETF－追蹤ESG高股息指數，季配息',
+      '00919':'群益台灣精選高息ETF－台灣高息股，月配息',
+      '0050':'元大台灣50ETF－追蹤台灣前50大企業，台股指標',
+      '0056':'元大高股息ETF－高殖利率台股，季配息',
+    };
+
+    // 加入 knownPrices 對應的公司描述
+    var codeDescLines = Object.entries(bizDesc).map(function(kv){return kv[0]+'('+kv[1]+')';}).join('\n');
     var rPrompt = '你是一位資深台灣股市基金經理人，勝率長期高於90%。今天是'+today+'。\n'
       +'今日市場數據：\n'
       +'加權指數：'+(_t?_t.price?.toLocaleString()+'點('+(_t.changePct>=0?'+':'')+_t.changePct?.toFixed(2)+'%)':'—')+'\n'
       +'費城半導體：'+(_s?(_s.changePct>=0?'+':'')+_s.changePct?.toFixed(2)+'%':'—')+'\n'
       +'S&P500：'+(_s5?(_s5.changePct>=0?'+':'')+_s5.changePct?.toFixed(2)+'%':'—')+'\n'
       +'台積電：'+(_tmc?'$'+_tmc.price?.toFixed(0)+'('+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%)':'—')+'\n'
-      +(knownPrices?'已知個股現價(請以此為準)：'+knownPrices+'\n':'')+' \n'
-      +'請分析台股市場，選出10支值得關注的標的（涵蓋多種產業，不要全部集中在同一族群）。\n\n'
-      +'【回覆格式】只回純JSON陣列，10個物件，不要任何說明文字、不要markdown：\n'
-      +'[{"g":數字,"code":"台股4-5位數代碼","name":"該代碼對應的真實公司名稱","entry":數字,"stop":數字,"target":數字,"score":數字,"basis":"四面向各1句"}]\n\n'
-      +'【欄位規則】\n'
-      +'g=1(可進場5支)：技術面已啟動，entry<=現價，籌碼偏多\n'
-      +'g=2(等待5支)：基本面佳但現價偏高，entry<現價，等回測\n'
-      +'code：真實台股代碼，4-5位數字\n'
-      +'name：該code對應的真實公司名稱（例如2330→台積電，2454→聯發科，2382→廣達，6533→晶心科，4919→新唐，每間公司名稱都不同）\n'
-      +'entry：建議入場價，必須在現價±15%以內\n'
-      +'stop：停損價，必須低於entry的88-95%\n'
-      +'target：目標價，必須高於entry的115-130%\n'
-      +'score：1-100評分\n'
-      +'basis：「基本面：...。技術面：...。籌碼面：...。市場面：...。」\n\n'
-      +'⚠️ 嚴格禁止：name 欄位不可全部寫同一家公司！每個 code 必須對應不同的真實台灣公司名稱！\n'
+      +(knownPrices?'已知個股現價(請以此為準)：'+knownPrices+'\n':'')+'\n'
+      +'【台股公司業務對照表（basis基本面必須依此，禁止自行猜測）】\n'
+      +codeDescLines+'\n\n'
+      +'⚠️ basis欄位基本面必須符合上表真實業務，禁止張冠李戴！\n'
+      +'例如：國泰金(2882)是金融業，新唐(4919)是MCU微控制器IC，飛捷(6206)是POS系統。\n\n'
+      +'請選出10支台股標的（涵蓋多種產業）：\n'
+      +'只回純JSON，10個物件，不要markdown：\n'
+      +'[{"g":1或2,"code":"代碼","name":"正確公司名","entry":數字,"stop":數字,"target":數字,"score":數字,"basis":"基本面：（真實業務描述）。技術面：...。籌碼面：...。市場面：...。"}]\n\n'
+      +'g=1(可進場5支)：entry<=現價，技術啟動，籌碼偏多\n'
+      +'g=2(等待5支)：基本面佳但現價偏高，等回測\n'
+      +'entry：現價±15%以內，stop：entry的88-95%，target：entry的115-130%\n'
       +'只回JSON陣列，不要任何其他文字。\n';
-
     callAI(rPrompt, function(text) {
       try {
         var clean = text.replace(/```json|```/g,'').trim();
@@ -1384,15 +1420,22 @@ function renderAI() {
           return true;
         });
 
-        // 用 STOCK_DB 校正名稱，防止 AI 亂填（含動態載入的完整清單）
+        // 用 STOCK_DB 校正名稱
         var stockDbMap = window._stockDbMap || {};
         if (!window._stockDbMap) {
           STOCK_DB.forEach(function(s){ stockDbMap[s.code] = s.name; });
           window._stockDbMap = stockDbMap;
         }
         recs.forEach(function(r) {
-          if (stockDbMap[r.code]) {
-            r.name = stockDbMap[r.code]; // 強制用 DB 名稱覆蓋 AI 給的名稱
+          // 1. 強制校正公司名稱
+          if (stockDbMap[r.code]) r.name = stockDbMap[r.code];
+          // 2. 強制替換 basis 基本面描述，防止 AI 亂填
+          if (bizDesc[r.code]) {
+            var desc = bizDesc[r.code].split('－')[1] || bizDesc[r.code];
+            // 只替換「基本面：」那段，保留 AI 給的技術面/籌碼面/市場面
+            if (r.basis) {
+              r.basis = r.basis.replace(/基本面：[^。]*。/, '基本面：' + desc + '。');
+            }
           }
         });
 
