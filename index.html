@@ -877,7 +877,7 @@ function renderHome() {
           // API 抓不到，用 AI 查今天實際產業漲跌
           var today2 = new Date();
           var dateStr = today2.getFullYear()+'年'+(today2.getMonth()+1)+'月'+today2.getDate()+'日';
-          var aiSectorPrompt = '今天是'+dateStr+'。請根據你對今日台股市場的了解，回答以下問題。'+mktData+'\n\n'
+          var aiSectorPrompt = '今天是'+dateStr+'，台股已收盤。根據今日市場數據：'+mktData+'\n\n你是專業台股分析師，請根據以上指數漲跌推估各產業表現。費半跌表示半導體弱，S&P漲表示美股強，以此類推。\n\n請只回純JSON（不要markdown、不要說明文字）：\n{"top":[{"name":"產業","pct":數字},...],"weak":[{"name":"產業","pct":數字},...],"strategy":["策略1","策略2","策略3"]}\n\ntop=推估今日最強10個台股產業，pct=正數\nweak=推估今日最弱10個台股產業，pct=負數\nstrategy=明日操作策略3條\n只回JSON。';
             +'請只回JSON，格式：\n'
             +'{"top":[{"name":"產業名","pct":漲跌百分比數字},...],"weak":[{"name":"產業名","pct":漲跌百分比數字},...],"strategy":["策略1","策略2","策略3"]}\n\n'
             +'top = 今日漲幅最大的10個台股產業（排序由強到弱，含實際漲跌%）\n'
@@ -912,6 +912,7 @@ function renderHome() {
               if (wkEl  && d.weak)     wkEl.innerHTML   = d.weak.slice(0,10).map(function(t,i){return makeSectorRowFromAI(t,i,false);}).join('');
               if (stEl  && d.strategy) stEl.innerHTML   = d.strategy.map(function(t){return '<div>✓ '+t+'</div>';}).join('');
             } catch(e) {
+              console.log('sector AI parse error:', e, 'raw text:', text?.slice(0,200));
               if (stEl)  stEl.innerHTML  = '<span style="opacity:.6">⚠️ 分析失敗，請重新整理</span>';
               if (topEl) topEl.innerHTML = '<span style="opacity:.6">—</span>';
               if (wkEl)  wkEl.innerHTML  = '<span style="opacity:.6">—</span>';
@@ -2138,7 +2139,33 @@ function savePromptFromEditor(key) {
   setTimeout(() => toast.remove(), 3000);
 }
 
-// ── 產業個股展開 ─────────────────────────────────────────────
+// ── 產業個股展開（用 S.prices + 產業對照表）────────────────────
+var SECTOR_CODES = {
+  '半導體':['2302','2303','2329','2330','2337','2344','2351','2379','2385','2408','2449','2454','3034','3035','3105','3130','3443','3529','5347','5483','6415','6488','6770'],
+  '電子零組件':['2308','2327','2338','2360','2362','2383','2392','2456','2458','2464','2492'],
+  '電腦及週邊':['2353','2356','2357','2362','2365','2374','2387','2399','3231'],
+  '光電':['2401','2403','2404','2405','2406','3008','3014','3049','3406','6176'],
+  '通信網路':['2345','2346','2347','2348','3380','4904','4999'],
+  '電機機械':['1503','1504','1513','1515','1519','1521','1536','2049','2059'],
+  '金融保險':['2801','2823','2832','2834','2880','2881','2882','2883','2884','2885','2886','2887','2888','2889','2890','2891','2892','5871','5876','5880'],
+  '食品工':['1201','1210','1213','1215','1216','1217','1218','1219','1220','1225','1227','1229'],
+  '塑膠工':['1301','1303','1304','1305','1308','1309','1310','1312','1313','1314','1315','1316','1317','1318','1319','1321','1323','1324','1325','1326'],
+  '紡織纖維':['1402','1404','1414','1434','1436','1440','1441','1446','1452','1454','1460','1463','1464','1465','1466','1476','1477'],
+  '鋼鐵工':['2002','2006','2007','2008','2010','2012','2013','2014','2015','2023','2027','2028','2029','2032','2038'],
+  '航運':['2603','2605','2606','2607','2608','2609','2610','2611','2612','2613','2615','2616','2617','2618'],
+  '建材營造':['2501','2511','2520','2524','2530','2534','2535','2536','2537','2538','2540','2542','2545','2547','2548'],
+  '汽車工':['2201','2204','2207','2209','2211','2227'],
+  '生技醫療':['1786','4108','4126','4128','4142','4174','4726','6446'],
+  '其他電子':['3017','3019','3024','3026','3030','3042','3044','3048','3051','3054','3057','3062','3066','3088','3092','3094','3095'],
+  '水泥工':['1101','1102','1103','1104','1108','1109','1110'],
+  '化學工':['1702','1710','1711','1712','1714','1717','1718','1720','1722','1723','1724','1725','1726','1727','1730','1731','1732','1733','1734','1735','1736','1737','1786'],
+  '油電燃氣':['9907','9908','9911','9914'],
+  '觀光餐旅':['2701','2702','2704','2707','2712','2717','2718','2719','2722','2726','2727','2729'],
+  '貿易百貨':['2903','2915','2916','5904'],
+  '造紙工':['1902','1904','1905','1907','1909','1910'],
+  '橡膠工':['2101','2102','2103','2104','2105','2106','2107','2108','2109','2110','2111','2112'],
+};
+
 function toggleSectorStocks(id) {
   var el = document.getElementById(id);
   if (!el) return;
@@ -2149,55 +2176,34 @@ function toggleSectorStocks(id) {
   var sector = el.dataset.sector;
   if (!sector) return;
 
-  // 從 TWSE 抓該產業個股
-  fetch('https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX20_ALLBUT0999', {
-    signal: AbortSignal.timeout(8000)
-  })
-  .then(function(r){ return r.ok ? r.json() : null; })
-  .then(function(data) {
-    if (!data) { el.textContent = '無法載入個股資料'; return; }
-    // 過濾該產業股票
-    var stocks = data.filter(function(s){
-      return (s.Industry || s.產業別 || '') === sector && s.Code && s.Name;
-    });
-    // 若 API 無產業欄位，改用全量資料從 S.prices 比對
-    if (!stocks.length) {
-      // 用已知現價資料列出前10大漲/跌
-      var priceList = Object.entries(S.prices || {})
-        .filter(function(kv){ return kv[1] && kv[1].price && /^\d{4}$/.test(kv[0]); })
-        .map(function(kv){
-          var db = STOCK_DB.find(function(s){return s.code===kv[0];});
-          return {code:kv[0], name:db?db.name:kv[1].name||kv[0], pct:kv[1].changePct||0};
-        })
-        .sort(function(a,b){return b.pct-a.pct;})
-        .slice(0,10);
-      el.innerHTML = priceList.length
-        ? priceList.map(function(s,i){
-            return '<div style="display:flex;justify-content:space-between">'
-              +'<span>'+(i+1)+'. '+s.name+' '+s.code+'</span>'
-              +'<span style="color:'+(s.pct>=0?'#86efac':'#fca5a5')+';font-family:monospace">'+(s.pct>=0?'+':'')+s.pct.toFixed(2)+'%</span>'
-              +'</div>';
-          }).join('')
-        : '暫無個股資料';
-      return;
-    }
-    // 排序取前10
-    stocks.sort(function(a,b){
-      var pa = parseFloat((a.ChangePercent||'0').replace(/[+%]/g,''));
-      var pb = parseFloat((b.ChangePercent||'0').replace(/[+%]/g,''));
-      return pb - pa;
-    });
-    el.innerHTML = stocks.slice(0,10).map(function(s,i){
-      var pct = parseFloat((s.ChangePercent||'0').replace(/[+%]/g,''));
-      var dir = (s.Direction||'+') === '-' ? -1 : 1;
-      pct = dir * pct;
-      return '<div style="display:flex;justify-content:space-between">'
-        +'<span>'+(i+1)+'. '+s.Name+' <span style="opacity:.6">'+s.Code+'</span></span>'
-        +'<span style="color:'+(pct>=0?'#86efac':'#fca5a5')+';font-family:monospace">'+(pct>=0?'+':'')+pct.toFixed(2)+'%</span>'
-        +'</div>';
-    }).join('');
-  })
-  .catch(function(){ el.textContent = '載入失敗'; });
+  // 找出產業 key（可能是「半導體業」→「半導體」的縮短版）
+  var sectorKey = sector.replace(/業$|工業$/, '');
+  var sectorCodes = SECTOR_CODES[sectorKey] || SECTOR_CODES[sector] || [];
+
+  var stocks = [];
+  Object.entries(S.prices || {}).forEach(function(kv) {
+    var code = kv[0], p = kv[1];
+    if (!p || !p.price) return;
+    if (sectorCodes.indexOf(code) < 0) return;
+    var db = STOCK_DB.find(function(s){return s.code===code;});
+    stocks.push({code:code, name:db?db.name:(p.name||code), pct:p.changePct||0});
+  });
+
+  if (!stocks.length) {
+    el.innerHTML = sectorCodes.slice(0,10).map(function(code){
+      var db = STOCK_DB.find(function(s){return s.code===code;});
+      return '<div style="opacity:.7">' + code + (db?' '+db.name:'') + '</div>';
+    }).join('') || '暫無個股資料';
+    return;
+  }
+
+  stocks.sort(function(a,b){return b.pct-a.pct;});
+  el.innerHTML = stocks.slice(0,10).map(function(s,i){
+    return '<div style="display:flex;justify-content:space-between;padding:1px 0">'
+      + '<span>' + (i+1) + '. ' + s.name + ' <span style="opacity:.5">' + s.code + '</span></span>'
+      + '<span style="color:' + (s.pct>=0?'#86efac':'#fca5a5') + ';font-family:monospace">'
+      + (s.pct>=0?'+':'') + s.pct.toFixed(2) + '%</span></div>';
+  }).join('');
 }
 
 function resetPromptConfirm(key) {
