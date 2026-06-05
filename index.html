@@ -185,7 +185,7 @@ body{font-family:'Noto Sans TC',sans-serif;color:var(--text);max-width:430px;mar
     <button class="nb"    id="nb-portfolio" onclick="go('portfolio')"><i class="ti ti-briefcase"></i><span>持倉</span></button>
     <button class="nb"    id="nb-ai"        onclick="go('ai')"><i class="ti ti-brain"></i><span>AI分析</span></button>
     <button class="nb"    id="nb-news"      onclick="go('news')"><i class="ti ti-news"></i><span>新聞</span></button>
-    <button class="nb"    id="nb-alert"     onclick="go('alert')"><i class="ti ti-bell"></i><span>提醒</span></button>
+    <button class="nb"    id="nb-alert"     onclick="go('alert')"><i class="ti ti-settings"></i><span>工具箱</span></button>
   </nav>
 </div>
 
@@ -1420,6 +1420,12 @@ function renderAI() {
           return true;
         });
 
+        // 修正 score：AI 有時給 0-1 小數，統一轉成 1-100 整數
+        recs.forEach(function(r) {
+          if (r.score > 0 && r.score <= 1) r.score = Math.round(r.score * 100);
+          r.score = Math.min(100, Math.max(1, Math.round(r.score || 50)));
+        });
+
         // 用 STOCK_DB 校正名稱
         var stockDbMap = window._stockDbMap || {};
         if (!window._stockDbMap) {
@@ -1504,6 +1510,23 @@ function renderAI() {
 
         document.getElementById('ai-recs-loading').style.display='none';
         document.getElementById('ai-recs-ready').style.display='block';
+
+        // 把 AI 推薦但尚無現價的代碼補抓
+        var missingCodes = recs.filter(function(r){ return r.code && !gP(r.code); }).map(function(r){return r.code;});
+        if (missingCodes.length > 0) {
+          fetch('/api/prices?codes='+missingCodes.join(','), {signal:AbortSignal.timeout(10000)})
+            .then(function(r){ return r.json(); })
+            .then(function(json){
+              if (json.data) {
+                Object.assign(S.prices, json.data);
+                // 重新渲染選股卡片（現價補齊）
+                var izEl2=document.getElementById('recs-in-zone');
+                var wzEl2=document.getElementById('recs-wait-zone');
+                if(izEl2){ izEl2.innerHTML=''; inZone.forEach(function(r){izEl2.appendChild(makeCard(r));}); }
+                if(wzEl2){ wzEl2.innerHTML=''; waiting.forEach(function(r){wzEl2.appendChild(makeCard(r));}); }
+              }
+            }).catch(function(){});
+        }
       } catch(e) {
         document.getElementById('ai-recs-loading').textContent='選股分析失敗，請重新整理';
         console.log('recs err:',e,text.slice(0,200));
