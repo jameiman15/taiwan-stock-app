@@ -821,17 +821,17 @@ function renderHome() {
       var stEl  = document.getElementById('today-strategy');
 
       try {
-        // 透過 /api/sector proxy 抓 TWSE 產業資料
+        // 抓產業漲跌：先試 /api/sector，失敗則用 AI 網路搜尋
         var sectorData = [];
         try {
-          var sectorRes = await fetch('/api/sector', { signal: AbortSignal.timeout(10000) });
+          var sectorRes = await fetch('/api/sector', { signal: AbortSignal.timeout(8000) });
           if (sectorRes.ok) {
             var sectorJson = await sectorRes.json();
-            if (sectorJson.ok && Array.isArray(sectorJson.sectors)) {
+            if (sectorJson.ok && Array.isArray(sectorJson.sectors) && sectorJson.sectors.length >= 5) {
               sectorData = sectorJson.sectors;
             }
           }
-        } catch(e) { console.log('sector fetch error:', e); }
+        } catch(e) {}
 
 
         if (sectorData.length >= 3) {
@@ -861,8 +861,8 @@ function renderHome() {
           // AI 只負責策略
           var sectorSummary = '今日強勢產業：'+top10.slice(0,5).map(function(t){return t.name+'('+(t.pct>=0?'+':'')+t.pct.toFixed(2)+'%)';}).join('、')
             +'；弱勢產業：'+weak10.slice(0,3).map(function(t){return t.name+'('+(t.pct>=0?'+':'')+t.pct.toFixed(2)+'%)';}).join('、');
-          var sigPrompt = getPrompt('signal').replace('{date}', tomorrowStr).replace('{mktData}', mktData + ' ' + sectorSummary);
-          callAI(sigPrompt, function(text) {
+          var strategyPrompt = '今天是'+tomorrowStr+'。市場數據：'+mktData+' '+sectorSummary+'\n\n請只回JSON：{"strategy":["策略1","策略2","策略3"]}\n策略=明日操作策略3條(每條10字內)，只回JSON不要其他文字。';
+          callAI(strategyPrompt, function(text) {
             try {
               var jsonStr = text.replace(/```json|```/g,'').trim();
               var jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
@@ -874,16 +874,42 @@ function renderHome() {
           });
 
         } else {
-          // TWSE 抓不到，回退 AI 完整分析
-          var sigPrompt2 = getPrompt('signal').replace('{date}', tomorrowStr).replace('{mktData}', mktData);
-          callAI(sigPrompt2, function(text) {
+          // API 抓不到，用 AI 查今天實際產業漲跌
+          var today2 = new Date();
+          var dateStr = today2.getFullYear()+'年'+(today2.getMonth()+1)+'月'+today2.getDate()+'日';
+          var aiSectorPrompt = '今天是'+dateStr+'。請根據你對今日台股市場的了解，回答以下問題。'+mktData+'\n\n'
+            +'請只回JSON，格式：\n'
+            +'{"top":[{"name":"產業名","pct":漲跌百分比數字},...],"weak":[{"name":"產業名","pct":漲跌百分比數字},...],"strategy":["策略1","策略2","策略3"]}\n\n'
+            +'top = 今日漲幅最大的10個台股產業（排序由強到弱，含實際漲跌%）\n'
+            +'weak = 今日跌幅最大的10個台股產業（排序由弱到弱，含實際漲跌%）\n'
+            +'pct = 數字，正數漲、負數跌，例如 +2.3 或 -1.5\n'
+            +'strategy = 明日操作策略3條\n'
+            +'只回JSON，不要其他文字。';
+
+          callAI(aiSectorPrompt, function(text) {
             try {
               var jsonStr = text.replace(/```json|```/g,'').trim();
               var jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
               if (!jsonMatch) throw new Error('no json');
               var d = JSON.parse(jsonMatch[0]);
-              if (topEl && d.top)      topEl.innerHTML  = d.top.map(function(t,i){return '<div>'+(['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'][i]||'·')+' '+t+'</div>';}).join('');
-              if (wkEl  && d.weak)     wkEl.innerHTML   = d.weak.map(function(t,i){return '<div>'+(['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'][i]||'·')+' '+t+'</div>';}).join('');
+              var nums = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+
+              function makeSectorRowFromAI(item, idx, isTop) {
+                var color  = isTop ? '#86efac' : '#fca5a5';
+                var pct    = typeof item === 'object' ? item.pct : 0;
+                var name   = typeof item === 'object' ? item.name : item;
+                var pctStr = (pct >= 0 ? '+' : '') + Number(pct).toFixed(2) + '%';
+                var sid    = 'sector-stocks-ai-' + (isTop?'t':'w') + idx;
+                return '<div style="margin-bottom:3px">'
+                  + '<div style="display:flex;align-items:center;justify-content:space-between">'
+                  + '<span>' + nums[idx] + ' ' + name + '</span>'
+                  + '<span style="color:' + color + ';font-family:monospace;font-size:10px">' + pctStr + '</span>'
+                  + '</div>'
+                  + '</div>';
+              }
+
+              if (topEl && d.top)      topEl.innerHTML  = d.top.slice(0,10).map(function(t,i){return makeSectorRowFromAI(t,i,true);}).join('');
+              if (wkEl  && d.weak)     wkEl.innerHTML   = d.weak.slice(0,10).map(function(t,i){return makeSectorRowFromAI(t,i,false);}).join('');
               if (stEl  && d.strategy) stEl.innerHTML   = d.strategy.map(function(t){return '<div>✓ '+t+'</div>';}).join('');
             } catch(e) {
               if (stEl)  stEl.innerHTML  = '<span style="opacity:.6">⚠️ 分析失敗，請重新整理</span>';
@@ -1924,9 +1950,12 @@ g=2(等待)：基本面佳但現價偏高超過5%，等待回測支撐
   signal: `今天是{date}，台股明日開盤預測。市場數據：{mktData}
 
 請只回JSON，格式：
-{"top":["族群1","族群2","族群3"],"weak":["族群1","族群2"],"strategy":["策略一","策略二","策略三"]}
+{"top":[{"name":"族群名","pct":漲跌百分比數字},...],"weak":[{"name":"族群名","pct":漲跌百分比數字},...],"strategy":["策略一","策略二","策略三"]}
 
-top=最強3族群(2-3字)，weak=最弱2族群(2-3字)，strategy=今日操作策略3條(5字內每條)。只回JSON不要其他文字。`,
+top=今日最強10個台股產業族群（由強到弱，pct為漲跌%數字，漲為正、跌為負）
+weak=今日最弱10個台股產業族群（由弱到弱，pct為漲跌%數字）
+strategy=明日操作策略3條（每條10字內）
+只回JSON不要其他文字。`,
 
   framework: `以上為今日實際即時股價，請基於這些真實價格評估估值合理性。
 請用保守、理性、數據導向方式分析，從以下角度評估每檔：
