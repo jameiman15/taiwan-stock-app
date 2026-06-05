@@ -1383,6 +1383,19 @@ function renderAI() {
           seenCodes[r.code] = true;
           return true;
         });
+
+        // 用 STOCK_DB 校正名稱，防止 AI 亂填（含動態載入的完整清單）
+        var stockDbMap = window._stockDbMap || {};
+        if (!window._stockDbMap) {
+          STOCK_DB.forEach(function(s){ stockDbMap[s.code] = s.name; });
+          window._stockDbMap = stockDbMap;
+        }
+        recs.forEach(function(r) {
+          if (stockDbMap[r.code]) {
+            r.name = stockDbMap[r.code]; // 強制用 DB 名稱覆蓋 AI 給的名稱
+          }
+        });
+
         var inZone = recs.filter(function(r){return r.g===1;});
         var waiting = recs.filter(function(r){return r.g===2;});
 
@@ -2214,9 +2227,9 @@ const STOCK_DB = [
   // 半導體
   {code:'2330',name:'台積電',type:'stock'},
   {code:'2303',name:'聯電',type:'stock'},
-  {code:'2379',name:'瑞昱',type:'stock'},
   {code:'2454',name:'聯發科',type:'stock'},
   {code:'2408',name:'南亞科',type:'stock'},
+  {code:'2379',name:'瑞昱',type:'stock'},
   {code:'3711',name:'日月光投控',type:'stock'},
   {code:'2337',name:'旺宏',type:'stock'},
   {code:'3034',name:'聯詠',type:'stock'},
@@ -2230,9 +2243,15 @@ const STOCK_DB = [
   {code:'3529',name:'力旺',type:'stock'},
   {code:'6533',name:'晶心科技',type:'stock'},
   {code:'4919',name:'新唐',type:'stock'},
-  {code:'6206',name:'飛捷',type:'stock'},
-  {code:'2383',name:'台光電',type:'stock'},
-  {code:'3045',name:'台灣大',type:'stock'},
+  {code:'5269',name:'祥碩',type:'stock'},
+  {code:'6510',name:'精測',type:'stock'},
+  {code:'6239',name:'力成',type:'stock'},
+  {code:'6415',name:'矽力-KY',type:'stock'},
+  {code:'3406',name:'玉晶光',type:'stock'},
+  {code:'3661',name:'世芯-KY',type:'stock'},
+  {code:'5274',name:'信驊',type:'stock'},
+  {code:'4966',name:'譜瑞-KY',type:'stock'},
+  {code:'3105',name:'穩懋',type:'stock'},
   // AI伺服器/散熱
   {code:'3017',name:'奇鋐',type:'stock'},
   {code:'6230',name:'超眾',type:'stock'},
@@ -2241,26 +2260,20 @@ const STOCK_DB = [
   {code:'8299',name:'群聯',type:'stock'},
   {code:'6515',name:'穎崴',type:'stock'},
   {code:'3131',name:'弘塑',type:'stock'},
-  // AI先進封裝/CoWoS
-  {code:'3661',name:'世芯-KY',type:'stock'},
-  {code:'5274',name:'信驊',type:'stock'},
-  {code:'4966',name:'譜瑞-KY',type:'stock'},
-  // AI網通/高速傳輸
+  {code:'6669',name:'緯穎',type:'stock'},
+  {code:'6274',name:'台燿',type:'stock'},
+  {code:'3085',name:'碩天',type:'stock'},
   {code:'2419',name:'仲琦',type:'stock'},
   {code:'4977',name:'眾達-KY',type:'stock'},
   {code:'3026',name:'禾伸堂',type:'stock'},
   {code:'2492',name:'華新科',type:'stock'},
   {code:'6176',name:'瑞儀',type:'stock'},
-  // AI電源/功率半導體
-  {code:'6415',name:'矽力-KY',type:'stock'},
   {code:'2049',name:'上銀',type:'stock'},
   {code:'1536',name:'和大',type:'stock'},
-  {code:'6274',name:'台燿',type:'stock'},
-  {code:'3085',name:'碩天',type:'stock'},
-  // AI概念/應用
   {code:'6214',name:'精誠',type:'stock'},
   {code:'6409',name:'旭隼',type:'stock'},
-  // 科技/電子
+  {code:'3016',name:'嘉澤',type:'stock'},
+  // 電子/科技
   {code:'2317',name:'鴻海',type:'stock'},
   {code:'2308',name:'台達電',type:'stock'},
   {code:'2357',name:'華碩',type:'stock'},
@@ -2279,17 +2292,19 @@ const STOCK_DB = [
   {code:'2313',name:'華通',type:'stock'},
   {code:'2352',name:'佳世達',type:'stock'},
   {code:'2360',name:'致茂',type:'stock'},
-  {code:'2362',name:'藍天',type:'stock'},
-  {code:'2365',name:'昆盈',type:'stock'},
   {code:'2374',name:'佳能',type:'stock'},
   {code:'2392',name:'正崴',type:'stock'},
-  {code:'2397',name:'友通',type:'stock'},
-  {code:'2399',name:'映泰',type:'stock'},
   {code:'2404',name:'漢唐',type:'stock'},
-  {code:'2406',name:'國碩',type:'stock'},
-  {code:'3593',name:'力銘',type:'stock'},
   {code:'6271',name:'同欣電',type:'stock'},
-  {code:'6279',name:'胡連',type:'stock'},
+  {code:'2365',name:'昆盈',type:'stock'},
+  {code:'3042',name:'晶技',type:'stock'},
+  {code:'3044',name:'健鼎',type:'stock'},
+  {code:'2409',name:'友達',type:'stock'},
+  {code:'3481',name:'群創',type:'stock'},
+  {code:'6121',name:'新普',type:'stock'},
+  {code:'2439',name:'美律',type:'stock'},
+  {code:'6206',name:'飛捷',type:'stock'},
+  {code:'2345',name:'智邦',type:'stock'},
   // 通訊
   {code:'2412',name:'中華電信',type:'stock'},
   {code:'4904',name:'遠傳',type:'stock'},
@@ -2315,89 +2330,213 @@ const STOCK_DB = [
   {code:'5876',name:'上海商銀',type:'stock'},
   {code:'5871',name:'中租-KY',type:'stock'},
   {code:'6005',name:'群益證',type:'stock'},
+  {code:'2823',name:'中壽',type:'stock'},
+  {code:'2832',name:'台產',type:'stock'},
+  {code:'2850',name:'新產',type:'stock'},
+  {code:'2851',name:'中再保',type:'stock'},
+  {code:'2855',name:'統一證',type:'stock'},
+  {code:'2912',name:'統一超',type:'stock'},
+  // 零售/食品
+  {code:'2912',name:'統一超',type:'stock'},
+  {code:'2903',name:'遠百',type:'stock'},
+  {code:'2915',name:'潤泰全',type:'stock'},
+  {code:'5904',name:'寶雅',type:'stock'},
+  {code:'2723',name:'美食-KY',type:'stock'},
+  {code:'2727',name:'王品',type:'stock'},
+  {code:'2729',name:'瓦城',type:'stock'},
+  {code:'1216',name:'統一',type:'stock'},
+  {code:'1210',name:'大成',type:'stock'},
+  {code:'1227',name:'佳格',type:'stock'},
+  // 醫療/生技
+  {code:'4174',name:'浩鼎',type:'stock'},
+  {code:'6461',name:'益得',type:'stock'},
+  {code:'4107',name:'邦特',type:'stock'},
+  {code:'4726',name:'永信藥品',type:'stock'},
+  {code:'1701',name:'中化',type:'stock'},
+  {code:'1707',name:'葡萄王',type:'stock'},
+  {code:'4142',name:'國光生技',type:'stock'},
+  {code:'6446',name:'藥華藥',type:'stock'},
+  {code:'4968',name:'立積',type:'stock'},
+  // 航運
+  {code:'2603',name:'長榮',type:'stock'},
+  {code:'2615',name:'萬海',type:'stock'},
+  {code:'2609',name:'陽明',type:'stock'},
+  {code:'2610',name:'華航',type:'stock'},
+  {code:'2618',name:'長榮航',type:'stock'},
+  {code:'2605',name:'新興',type:'stock'},
+  {code:'2606',name:'裕民',type:'stock'},
+  {code:'2607',name:'榮運',type:'stock'},
+  {code:'2608',name:'大榮',type:'stock'},
   // 傳產/石化
-  {code:'6505',name:'台塑化',type:'stock'},
+  {code:'1101',name:'台泥',type:'stock'},
+  {code:'1102',name:'亞泥',type:'stock'},
   {code:'1301',name:'台塑',type:'stock'},
   {code:'1303',name:'南亞',type:'stock'},
   {code:'1326',name:'台化',type:'stock'},
-  {code:'2002',name:'中鋼',type:'stock'},
+  {code:'6505',name:'台塑化',type:'stock'},
   {code:'1402',name:'遠東新',type:'stock'},
-  {code:'1216',name:'統一',type:'stock'},
-  {code:'1101',name:'台泥',type:'stock'},
-  {code:'1102',name:'亞泥',type:'stock'},
-  {code:'1314',name:'中石化',type:'stock'},
-  {code:'2101',name:'南港',type:'stock'},
   {code:'1434',name:'福懋',type:'stock'},
-  {code:'1440',name:'南紡',type:'stock'},
-  {code:'1504',name:'東元',type:'stock'},
-  {code:'1513',name:'中興電',type:'stock'},
-  {code:'1605',name:'華新',type:'stock'},
+  {code:'2002',name:'中鋼',type:'stock'},
+  {code:'2014',name:'中鋼構',type:'stock'},
   {code:'2015',name:'豐興',type:'stock'},
-  {code:'2027',name:'大成鋼',type:'stock'},
-  {code:'2912',name:'統一超',type:'stock'},
-  {code:'2903',name:'遠百',type:'stock'},
-  {code:'2905',name:'漢神',type:'stock'},
-  // 食品/消費
-  {code:'1203',name:'味全',type:'stock'},
-  {code:'1210',name:'大成',type:'stock'},
-  {code:'1213',name:'大飲',type:'stock'},
-  {code:'1218',name:'泰山',type:'stock'},
-  {code:'1219',name:'福壽',type:'stock'},
-  {code:'1225',name:'統一',type:'stock'},
-  {code:'2707',name:'晶華',type:'stock'},
-  {code:'2727',name:'王品',type:'stock'},
-  // 生技醫療
-  {code:'4711',name:'中裕',type:'stock'},
-  {code:'4968',name:'立積',type:'stock'},
-  {code:'6446',name:'藥華藥',type:'stock'},
-  {code:'4126',name:'太醫',type:'stock'},
-  {code:'1789',name:'神隆',type:'stock'},
-  {code:'4107',name:'邦特',type:'stock'},
-  {code:'4174',name:'浩鼎',type:'stock'},
-  {code:'6461',name:'益安',type:'stock'},
-  {code:'6547',name:'高端疫苗',type:'stock'},
-  // 運輸/航運
-  {code:'2603',name:'長榮',type:'stock'},
-  {code:'2609',name:'陽明',type:'stock'},
-  {code:'2615',name:'萬海',type:'stock'},
-  {code:'2618',name:'長榮航',type:'stock'},
-  {code:'2610',name:'華航',type:'stock'},
-  {code:'2605',name:'新興',type:'stock'},
-  // 營建/資產
-  {code:'2511',name:'太子',type:'stock'},
-  {code:'2515',name:'中工',type:'stock'},
-  {code:'2520',name:'冠德',type:'stock'},
-  {code:'2597',name:'潤弘',type:'stock'},
-  {code:'5522',name:'遠雄',type:'stock'},
-  {code:'2504',name:'國產',type:'stock'},
-  // 觀光/娛樂
-  {code:'2701',name:'萬企',type:'stock'},
-  {code:'2704',name:'國賓',type:'stock'},
-  {code:'2706',name:'第一店',type:'stock'},
-  {code:'6481',name:'法拉帝',type:'stock'},
-  {code:'3293',name:'鈊象',type:'stock'},
-  {code:'6004',name:'元大期',type:'stock'},
-  // 熱門 ETF
+  {code:'1504',name:'東元',type:'stock'},
+  {code:'1519',name:'華城',type:'stock'},
+  {code:'1503',name:'士林電機',type:'stock'},
+  {code:'1513',name:'中興電',type:'stock'},
+  {code:'1476',name:'儒鴻',type:'stock'},
+  {code:'1477',name:'聚陽',type:'stock'},
+  {code:'1590',name:'亞德客-KY',type:'stock'},
+  {code:'2059',name:'川湖',type:'stock'},
+  {code:'2393',name:'億光',type:'stock'},
+  // ETF
   {code:'0050',name:'元大台灣50',type:'etf'},
   {code:'0056',name:'元大高股息',type:'etf'},
   {code:'00878',name:'國泰永續高股息',type:'etf'},
   {code:'00919',name:'群益台灣精選高息',type:'etf'},
   {code:'00929',name:'復華台灣科技優息',type:'etf'},
-  {code:'006208',name:'富邦台50',type:'etf'},
-  {code:'00881',name:'國泰台灣5G+',type:'etf'},
-  {code:'00896',name:'中信綠能及電動車',type:'etf'},
   {code:'00940',name:'元大台灣價值高息',type:'etf'},
-  {code:'00943',name:'國泰半導體',type:'etf'},
-  {code:'009816',name:'凱基台灣TOP50',type:'etf'},
-  {code:'00900',name:'富邦特選高股息30',type:'etf'},
-  {code:'00922',name:'國泰台灣領袖50',type:'etf'},
+  {code:'006208',name:'富邦台灣50',type:'etf'},
+  {code:'00881',name:'國泰台灣5G+',type:'etf'},
   {code:'00892',name:'富邦台灣半導體',type:'etf'},
+  {code:'00896',name:'中信綠能及電動車',type:'etf'},
+  {code:'00900',name:'富邦特選高股息30',type:'etf'},
+  {code:'00905',name:'元大台灣ESG永續',type:'etf'},
+  {code:'00912',name:'中信臺灣智慧50',type:'etf'},
+  {code:'00915',name:'凱基優選高股息30',type:'etf'},
+  {code:'00916',name:'國泰臺灣龍頭等權重',type:'etf'},
+  {code:'00917',name:'中信特選金融',type:'etf'},
+  {code:'00918',name:'大華優利高填息30',type:'etf'},
+  {code:'00921',name:'兆豐龍頭等權重',type:'etf'},
+  {code:'00922',name:'國泰台灣動態高息',type:'etf'},
+  {code:'00923',name:'群益台ESG低碳50',type:'etf'},
+  {code:'00927',name:'群益半導體收益',type:'etf'},
+  {code:'00928',name:'中信台灣碳中和',type:'etf'},
+  {code:'00930',name:'永豐ESG低碳高息',type:'etf'},
+  {code:'00932',name:'兆豐永續高息等權',type:'etf'},
+  {code:'00933',name:'國泰台灣領袖50',type:'etf'},
+  {code:'00934',name:'中信成長高息',type:'etf'},
+  {code:'00936',name:'台新臺灣IC設計',type:'etf'},
+  {code:'00937',name:'台新臺灣優選高息30',type:'etf'},
+  {code:'00938',name:'永豐台灣ESG',type:'etf'},
+  {code:'00939',name:'統一台灣高息動能',type:'etf'},
+  {code:'00940',name:'元大台灣價值高息',type:'etf'},
+  {code:'00941',name:'台新北美科技',type:'etf'},
+  {code:'00943',name:'兆豐台灣晶圓製造',type:'etf'},
+  {code:'00944',name:'第一金太空衛星',type:'etf'},
+  {code:'0052',name:'富邦科技',type:'etf'},
+  {code:'0053',name:'元大電子',type:'etf'},
+  {code:'0055',name:'元大MSCI金融',type:'etf'},
+  {code:'0057',name:'富邦摩台',type:'etf'},
+  // 其他
+  {code:'0061',name:'元大寶滬深',type:'etf'},
   {code:'00733',name:'富邦台灣中小',type:'etf'},
-  {code:'00757',name:'統一FANG+',type:'etf'},
-  {code:'00830',name:'國泰費城半導體',type:'etf'},
-  {code:'00858',name:'永豐美國500大',type:'etf'},
-  {code:'00864B',name:'中信美國公債20年',type:'etf'},
-  {code:'00679B',name:'元大美債20年',type:'etf'},
+  {code:'00945',name:'元大台灣價值高息',type:'etf'},
+  {code:'1217',name:'愛之味',type:'stock'},
+  {code:'1218',name:'泰山',type:'stock'},
+  {code:'1219',name:'福壽',type:'stock'},
+  {code:'1220',name:'台榮',type:'stock'},
+  {code:'1225',name:'福懋油',type:'stock'},
+  {code:'1229',name:'聯華',type:'stock'},
+  {code:'1231',name:'聯華食',type:'stock'},
+  {code:'1440',name:'南紡',type:'stock'},
+  {code:'1560',name:'中砂',type:'stock'},
+  {code:'1597',name:'鑫永銓',type:'stock'},
+  {code:'1599',name:'寬魚國際-KY',type:'stock'},
+  {code:'1605',name:'華新',type:'stock'},
+  {code:'1712',name:'興農',type:'stock'},
+  {code:'1786',name:'科妍',type:'stock'},
+  {code:'2006',name:'東和鋼鐵',type:'stock'},
+  {code:'2007',name:'燁興',type:'stock'},
+  {code:'2103',name:'台橡',type:'stock'},
+  {code:'2105',name:'正新',type:'stock'},
+  {code:'2201',name:'裕隆',type:'stock'},
+  {code:'2204',name:'中華',type:'stock'},
+  {code:'2207',name:'和泰車',type:'stock'},
+  {code:'2222',name:'匯僑',type:'stock'},
+  {code:'2231',name:'緯創',type:'stock'},
+  {code:'2247',name:'炎洲',type:'stock'},
+  {code:'2328',name:'廣宇',type:'stock'},
+  {code:'2351',name:'順德',type:'stock'},
+  {code:'2361',name:'神曜',type:'stock'},
+  {code:'2362',name:'藍天',type:'stock'},
+  {code:'2367',name:'燿華',type:'stock'},
+  {code:'2368',name:'金像電',type:'stock'},
+  {code:'2383',name:'台光電',type:'stock'},
+  {code:'2387',name:'精英',type:'stock'},
+  {code:'2397',name:'友通',type:'stock'},
+  {code:'2399',name:'映泰',type:'stock'},
+  {code:'2406',name:'國碩',type:'stock'},
+  {code:'2449',name:'京元電子',type:'stock'},
+  {code:'2475',name:'華映',type:'stock'},
+  {code:'2478',name:'大毅',type:'stock'},
+  {code:'2511',name:'太子',type:'stock'},
+  {code:'2520',name:'冠德',type:'stock'},
+  {code:'2524',name:'京城建設',type:'stock'},
+  {code:'2530',name:'龍巖',type:'stock'},
+  {code:'2533',name:'昱揚',type:'stock'},
+  {code:'2534',name:'宏璟',type:'stock'},
+  {code:'2535',name:'達欣工',type:'stock'},
+  {code:'2536',name:'宏普',type:'stock'},
+  {code:'2537',name:'聯上發展',type:'stock'},
+  {code:'2538',name:'基泰',type:'stock'},
+  {code:'2539',name:'農新',type:'stock'},
+  {code:'2540',name:'愛山林',type:'stock'},
+  {code:'2542',name:'興富發',type:'stock'},
+  {code:'2543',name:'皇鼎',type:'stock'},
+  {code:'2545',name:'皇翔',type:'stock'},
+  {code:'2546',name:'根基',type:'stock'},
+  {code:'2547',name:'日勝生',type:'stock'},
+  {code:'2548',name:'華固',type:'stock'},
+  {code:'2611',name:'志信',type:'stock'},
+  {code:'2612',name:'中航',type:'stock'},
+  {code:'2613',name:'中鋼運',type:'stock'},
+  {code:'2616',name:'山隆',type:'stock'},
+  {code:'2617',name:'台航',type:'stock'},
+  {code:'2867',name:'三商壽',type:'stock'},
+  {code:'2916',name:'滙豐汽車',type:'stock'},
+  {code:'3006',name:'晶豪科',type:'stock'},
+  {code:'3023',name:'信邦',type:'stock'},
+  {code:'3037',name:'欣興',type:'stock'},
+  {code:'3130',name:'一零四',type:'stock'},
+  {code:'3149',name:'正達',type:'stock'},
+  {code:'3259',name:'騰景-KY',type:'stock'},
+  {code:'3293',name:'鈊象',type:'stock'},
+  {code:'3380',name:'明泰',type:'stock'},
+  {code:'3498',name:'陽程',type:'stock'},
+  {code:'3515',name:'華擎',type:'stock'},
+  {code:'3518',name:'柏騰',type:'stock'},
+  {code:'3552',name:'同致',type:'stock'},
+  {code:'3576',name:'聯合再生',type:'stock'},
+  {code:'3593',name:'力銘',type:'stock'},
+  {code:'3630',name:'新鉅科',type:'stock'},
+  {code:'3673',name:'TPK-KY',type:'stock'},
+  {code:'3682',name:'商之器',type:'stock'},
+  {code:'3714',name:'兆利',type:'stock'},
+  {code:'4108',name:'懷特',type:'stock'},
+  {code:'4137',name:'麗豐-KY',type:'stock'},
+  {code:'4148',name:'全宇生技-KY',type:'stock'},
+  {code:'5608',name:'四維航',type:'stock'},
+  {code:'5859',name:'弘遠',type:'stock'},
+  {code:'6169',name:'正修科大',type:'stock'},
+  {code:'6207',name:'晶焱',type:'stock'},
+  {code:'6235',name:'華孚',type:'stock'},
+  {code:'6238',name:'勝宏',type:'stock'},
+  {code:'6244',name:'茂迪',type:'stock'},
+  {code:'6279',name:'胡連',type:'stock'},
+  {code:'6285',name:'啟碁',type:'stock'},
+  {code:'6414',name:'樺漢',type:'stock'},
+  {code:'6423',name:'元晶',type:'stock'},
+  {code:'6451',name:'網家',type:'stock'},
+  {code:'6456',name:'GIS-KY',type:'stock'},
+  {code:'6509',name:'聚和',type:'stock'},
+  {code:'6541',name:'泓德能源',type:'stock'},
+  {code:'6547',name:'亞諾法',type:'stock'},
+  {code:'6679',name:'台嘉碩',type:'stock'},
+  {code:'6706',name:'惠特',type:'stock'},
+  {code:'6712',name:'長聖',type:'stock'},
+  {code:'6756',name:'慧穩科技',type:'stock'},
+  {code:'6789',name:'采鈺',type:'stock'},
+  {code:'8046',name:'南電',type:'stock'},
 ];
 
 function openAddModal() {
@@ -2779,6 +2918,68 @@ function setAcct(id) {
   S.acct = id; renderTabs(); renderPage(S.page);
 }
 
+// ─── 動態載入完整股票清單（TWSE + TPEx OpenAPI，從瀏覽器直接呼叫）───────
+async function loadFullStockDB() {
+  // 建立現有 STOCK_DB 的 code set，避免重複
+  const existing = new Set(STOCK_DB.map(s => s.code));
+
+  try {
+    // 同時抓上市（TWSE）和上櫃（TPEx）
+    const [twseRes, tpexRes] = await Promise.allSettled([
+      fetch('https://openapi.twse.com.tw/v1/opendata/t187ap03_L', {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(8000)
+      }),
+      fetch('https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O', {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(8000)
+      })
+    ]);
+
+    let added = 0;
+
+    // 上市股票
+    if (twseRes.status === 'fulfilled' && twseRes.value.ok) {
+      const data = await twseRes.value.json();
+      data.forEach(item => {
+        const code = item['有價證券代號']?.trim();
+        const name = item['有價證券名稱']?.trim();
+        if (!code || !name || existing.has(code)) return;
+        if (!/^\d{4,6}$/.test(code)) return; // 只要純數字代號
+        STOCK_DB.push({ code, name, type: 'stock' });
+        existing.add(code);
+        added++;
+      });
+    }
+
+    // 上櫃股票
+    if (tpexRes.status === 'fulfilled' && tpexRes.value.ok) {
+      const data = await tpexRes.value.json();
+      data.forEach(item => {
+        const code = item['SecuritiesCompanyCode']?.trim() || item['有價證券代號']?.trim();
+        const name = item['CompanyName']?.trim() || item['有價證券名稱']?.trim();
+        if (!code || !name || existing.has(code)) return;
+        if (!/^\d{4,6}$/.test(code)) return;
+        STOCK_DB.push({ code, name, type: 'stock' });
+        existing.add(code);
+        added++;
+      });
+    }
+
+    if (added > 0) {
+      // 按代號排序
+      STOCK_DB.sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+      console.log('[STOCK_DB] 動態載入完成，新增', added, '支，總計', STOCK_DB.length, '支');
+      // 更新 AI 選股的名稱校正 map
+      if (typeof window._stockDbMap !== 'undefined') {
+        STOCK_DB.forEach(s => { window._stockDbMap[s.code] = s.name; });
+      }
+    }
+  } catch(e) {
+    console.log('[STOCK_DB] 動態載入失敗，使用內建清單', e.message);
+  }
+}
+
 // ─── INIT ───────────────────────────────────────────────────
 renderTabs();
 renderHome();
@@ -2805,6 +3006,9 @@ async function fetchAndRender() {
   // 同步完成後抓股價
   await fetchAndRender();
   setInterval(fetchAndRender, 60000);
+
+  // 背景載入完整股票清單（不阻塞主流程）
+  loadFullStockDB();
 
   // ── 每天早上 8:00 自動刷新新聞 ──────────────────────────────────
   function scheduleNewsRefresh() {
