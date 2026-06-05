@@ -1,12 +1,12 @@
 // api/sector.js — 富果 Fugle 即時產業漲跌幅
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 's-maxage=60');
+  res.setHeader('Cache-Control', 'no-store');
 
   const FUGLE_KEY = process.env.FUGLE_TOKEN || 'ca453271-e70a-4b5a-8631-95cec32fb39a';
   const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36';
 
-  // ── 1. Fugle snapshot/industries（最佳，即時產業指數）─────────
+  // ── 1. Fugle snapshot/industries TSE ─────────────────────────
   try {
     const r = await fetch('https://api.fugle.tw/marketdata/v1.0/stock/snapshot/industries/TSE', {
       headers: {
@@ -17,50 +17,43 @@ export default async function handler(req, res) {
       signal: AbortSignal.timeout(8000)
     });
 
+    const raw = await r.text();
+    console.log('[sector] Fugle status:', r.status);
+    console.log('[sector] Fugle raw (first 800):', raw.slice(0, 800));
+
     if (r.ok) {
-      const data = await r.json();
-      const industries = data?.data || data?.industries || data || [];
-      const list = Array.isArray(industries) ? industries : Object.values(industries);
+      const data = JSON.parse(raw);
 
-      if (list.length >= 5) {
-        const sectors = list
-          .filter(item => item.industry || item.name || item.industryName)
-          .map(item => {
-            const name = (item.industry || item.industryName || item.name || '').trim();
-            const pct  = parseFloat(item.changePercent || item.change_percent || item.pct || 0);
-            return { name, pct: +pct.toFixed(2) };
-          })
-          .filter(s => s.name)
-          .sort((a, b) => b.pct - a.pct);
+      // 找出陣列
+      const list = Array.isArray(data) ? data
+        : Array.isArray(data?.data) ? data.data
+        : Array.isArray(data?.industries) ? data.industries
+        : [];
 
-        if (sectors.length >= 5) {
-          return res.status(200).json({ ok: true, sectors, source: 'fugle_industries' });
-        }
+      console.log('[sector] list length:', list.length);
+      if (list.length > 0) console.log('[sector] first item:', JSON.stringify(list[0]));
+
+      if (list.length >= 3) {
+        const sectors = list.map(item => {
+          // 嘗試各種可能的欄位名
+          const name = item.industry || item.industryName || item.name || item.Industry || '';
+          const pct  = parseFloat(
+            item.changePercent ?? item.change_percent ?? item.changeRatio ??
+            item.priceChange?.changePercent ?? item.changeRate ?? 0
+          );
+          return { name: name.trim(), pct: +pct.toFixed(2) };
+        })
+        .filter(s => s.name)
+        .sort((a, b) => b.pct - a.pct);
+
+        return res.status(200).json({ ok: true, sectors, source: 'fugle', raw_sample: list[0] });
       }
-    } else {
-      console.log('Fugle industries status:', r.status, await r.text().catch(()=>''));
     }
   } catch(e) {
-    console.log('Fugle industries error:', e.message);
+    console.log('[sector] Fugle error:', e.message);
   }
 
-  // ── 2. Fugle snapshot/markets（備用，市場整體資料）────────────
-  try {
-    const r = await fetch('https://api.fugle.tw/marketdata/v1.0/stock/snapshot/markets/TSE', {
-      headers: {
-        'Authorization': `Bearer ${FUGLE_KEY}`,
-        'User-Agent': UA,
-      },
-      signal: AbortSignal.timeout(8000)
-    });
-
-    if (r.ok) {
-      const data = await r.json();
-      console.log('markets keys:', Object.keys(data || {}).slice(0,5));
-    }
-  } catch(e) {}
-
-  // ── 3. TWSE MI_INDEX20（最後備用）────────────────────────────
+  // ── 2. TWSE MI_INDEX20 備用 ──────────────────────────────────
   try {
     const r = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX20', {
       headers: { 'User-Agent': UA },
@@ -78,7 +71,7 @@ export default async function handler(req, res) {
           })
           .sort((a, b) => b.pct - a.pct);
         if (sectors.length >= 5)
-          return res.status(200).json({ ok: true, sectors, source: 'twse_mi_index20' });
+          return res.status(200).json({ ok: true, sectors, source: 'twse' });
       }
     }
   } catch(e) {}
