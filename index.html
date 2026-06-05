@@ -805,16 +805,20 @@ function renderHome() {
     if (opEl) opEl.textContent = openP + '%';
     if (rdEl) rdEl.textContent = redP + '%';
     if (lgEl && bgEl) {
-      if (score > 0.5)       { lgEl.style.background='#22c55e'; bgEl.textContent='🟢 偏多'; }
-      else if (score > 0)    { lgEl.style.background='#86efac'; bgEl.textContent='🟡 中性偏多'; }
-      else if (score > -0.5) { lgEl.style.background='#fbbf24'; bgEl.textContent='🟡 中性偏空'; }
-      else                   { lgEl.style.background='#ef4444'; bgEl.textContent='🔴 偏空'; }
+      if (score > 0.5)       { lgEl.style.background='#ef4444'; bgEl.textContent='🔴 偏多'; }
+      else if (score > 0)    { lgEl.style.background='#fca5a5'; bgEl.textContent='🟡 中性偏多'; }
+      else if (score > -0.5) { lgEl.style.background='#86efac'; bgEl.textContent='🟡 中性偏空'; }
+      else                   { lgEl.style.background='#22c55e'; bgEl.textContent='🟢 偏空'; }
     }
 
     // ── 抓 TWSE 產業漲跌幅 ──────────────────────────────────────
     var mktData = 'S&P500:'+(spPct>=0?'+':'')+spPct.toFixed(2)+'% 費半:'+(soxPct>=0?'+':'')+soxPct.toFixed(2)+'% 台積電ADR:'+(tsmPct>=0?'+':'')+tsmPct.toFixed(2)+'% 加權:'+(taiex?(taiex.changePct>=0?'+':'')+taiex.changePct.toFixed(2)+'%':'—');
 
-    // 從 TWSE 抓即時產業熱力資料
+    // 產業資料：只在進網站時載入一次
+    if (window._sectorLoaded) return;
+    window._sectorLoaded = true;
+
+    // 從 /api/sector 抓產業漲跌資料
     (async function() {
       var topEl = document.getElementById('top-sectors');
       var wkEl  = document.getElementById('weak-sectors');
