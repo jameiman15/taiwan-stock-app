@@ -6,54 +6,58 @@ export default async function handler(req, res) {
   const FUGLE_KEY = process.env.FUGLE_TOKEN || 'ca453271-e70a-4b5a-8631-95cec32fb39a';
   const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36';
 
-  // ── 1. Fugle snapshot/industries TSE ─────────────────────────
-  try {
-    const r = await fetch('https://api.fugle.tw/marketdata/v1.0/stock/snapshot/industries/TSE', {
-      headers: {
-        'Authorization': `Bearer ${FUGLE_KEY}`,
-        'User-Agent': UA,
-        'Accept': 'application/json',
-      },
-      signal: AbortSignal.timeout(8000)
-    });
+  // 依序嘗試 Fugle 可能正確的路徑
+  const FUGLE_URLS = [
+    'https://api.fugle.tw/marketdata/v1.0/stock/snapshot/industries/TSE',
+    'https://api.fugle.tw/marketdata/v1.0/stock/snapshot/industries/TWSE',
+    'https://api.fugle.tw/marketdata/v1.0/stock/snapshot/industries',
+    'https://api.fugle.tw/marketdata/v1.0/stock/intraday/industries/TSE',
+    'https://api.fugle.tw/marketdata/v1.0/stock/intraday/industries',
+  ];
 
-    const raw = await r.text();
-    console.log('[sector] Fugle status:', r.status);
-    console.log('[sector] Fugle raw (first 800):', raw.slice(0, 800));
+  for (const url of FUGLE_URLS) {
+    try {
+      const r = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${FUGLE_KEY}`,
+          'User-Agent': UA,
+          'Accept': 'application/json',
+        },
+        signal: AbortSignal.timeout(6000)
+      });
 
-    if (r.ok) {
-      const data = JSON.parse(raw);
+      const raw = await r.text();
+      console.log(`[sector] ${url.split('/').slice(-2).join('/')} → status:${r.status} body:${raw.slice(0,200)}`);
 
-      // 找出陣列
-      const list = Array.isArray(data) ? data
-        : Array.isArray(data?.data) ? data.data
-        : Array.isArray(data?.industries) ? data.industries
-        : [];
+      if (r.ok) {
+        const data = JSON.parse(raw);
+        const list = Array.isArray(data) ? data
+          : Array.isArray(data?.data) ? data.data
+          : Array.isArray(data?.industries) ? data.industries
+          : Array.isArray(data?.items) ? data.items
+          : [];
 
-      console.log('[sector] list length:', list.length);
-      if (list.length > 0) console.log('[sector] first item:', JSON.stringify(list[0]));
+        if (list.length >= 3) {
+          const sectors = list.map(item => {
+            const name = (item.industry || item.industryName || item.name || item.Industry || '').trim();
+            const pct  = parseFloat(
+              item.changePercent ?? item.change_percent ?? item.changeRatio ??
+              item.priceChange?.changePercent ?? item.changeRate ?? item.pctChg ?? 0
+            );
+            return { name, pct: +pct.toFixed(2) };
+          }).filter(s => s.name).sort((a, b) => b.pct - a.pct);
 
-      if (list.length >= 3) {
-        const sectors = list.map(item => {
-          // 嘗試各種可能的欄位名
-          const name = item.industry || item.industryName || item.name || item.Industry || '';
-          const pct  = parseFloat(
-            item.changePercent ?? item.change_percent ?? item.changeRatio ??
-            item.priceChange?.changePercent ?? item.changeRate ?? 0
-          );
-          return { name: name.trim(), pct: +pct.toFixed(2) };
-        })
-        .filter(s => s.name)
-        .sort((a, b) => b.pct - a.pct);
-
-        return res.status(200).json({ ok: true, sectors, source: 'fugle', raw_sample: list[0] });
+          if (sectors.length >= 3) {
+            return res.status(200).json({ ok: true, sectors, source: url.split('/').slice(-2).join('/') });
+          }
+        }
       }
+    } catch(e) {
+      console.log(`[sector] ${url.split('/').slice(-1)[0]} error:`, e.message);
     }
-  } catch(e) {
-    console.log('[sector] Fugle error:', e.message);
   }
 
-  // ── 2. TWSE MI_INDEX20 備用 ──────────────────────────────────
+  // ── TWSE MI_INDEX20 備用 ──────────────────────────────────────
   try {
     const r = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX20', {
       headers: { 'User-Agent': UA },
@@ -71,7 +75,7 @@ export default async function handler(req, res) {
           })
           .sort((a, b) => b.pct - a.pct);
         if (sectors.length >= 5)
-          return res.status(200).json({ ok: true, sectors, source: 'twse' });
+          return res.status(200).json({ ok: true, sectors, source: 'twse_mi_index20' });
       }
     }
   } catch(e) {}
