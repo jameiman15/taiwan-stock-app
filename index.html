@@ -335,7 +335,7 @@ let PF = (() => {
 })();
 
 // ─── Gemini AI proxy ────────────────────────────────────────
-// ─── AI 請求排隊（避免同時太多請求打爆 Groq）──────────────
+// ─── AI 請求排隊(避免同時太多請求打爆 Groq)──────────────
 const _aiQueue = [];
 let _aiRunning = 0;
 const _AI_CONCURRENCY = 2; // 最多同時 2 個請求
@@ -394,7 +394,7 @@ try {
 } catch {}
 
 // ─── PRICE FETCHING ─────────────────────────────────────────
-// 優先使用 /api/prices（Vercel serverless），若不可用則直接呼叫 TWSE（盤後）
+// 優先使用 /api/prices(Vercel serverless)，若不可用則直接呼叫 TWSE(盤後)
 async function fetchPrices() {
   S.loading = true;
   setDot('loading');
@@ -423,7 +423,7 @@ async function fetchPrices() {
     }
   } catch(e) { console.log('api/prices error:', e); }
 
-  // Fallback：直接呼叫 TWSE OpenAPI（無需 proxy，CORS 對部分瀏覽器開放）
+  // Fallback：直接呼叫 TWSE OpenAPI(無需 proxy，CORS 對部分瀏覽器開放)
   try {
     const r = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_AVG_ALL', {
       signal: AbortSignal.timeout(10000)
@@ -450,7 +450,7 @@ async function fetchPrices() {
     }
   } catch {}
 
-  // 最終 fallback：API 都不可用（本地開發環境常見）
+  // 最終 fallback：API 都不可用(本地開發環境常見)
   S.loading = false;
   setDot('err');
 }
@@ -501,7 +501,7 @@ function priceLine(code) {
 
 function stockCard(s, clickable=true, showDelete=false) {
   const p = gP(s.code);
-  // 完全用即時損益動態判斷（不用靜態 DIAG，確保與健診一致）
+  // 完全用即時損益動態判斷(不用靜態 DIAG，確保與健診一致)
   const _roi = p ? ((p.price - s.cost) / s.cost * 100) : 0;
   const d = _roi >= 30  ? {a:'sell',  l:'獲利了結'} :
             _roi <= -10 ? {a:'stop',  l:'評估停損'} :
@@ -842,7 +842,7 @@ function renderHome() {
   // ── 市場溫度計 AI 分析 ──────────────────────────────────────
   setTimeout(function() {
     if (!taiex && !sp500) return;
-    var taiexStr  = taiex  ? taiex.price.toFixed(0)+'點（'+(taiex.changePct>=0?'+':'')+taiex.changePct.toFixed(2)+'%）' : '—';
+    var taiexStr  = taiex  ? taiex.price.toFixed(0)+'點('+(taiex.changePct>=0?'+':'')+taiex.changePct.toFixed(2)+'%)' : '—';
     var taiexChg  = taiex  ? (taiex.changePct>=0?'+':'')+taiex.changePct.toFixed(2)+'%' : '—';
     var tsmcStr   = tsmc   ? '$'+tsmc.price.toFixed(0) : '—';
     var tsmcChg   = tsmc   ? (tsmc.changePct>=0?'+':'')+tsmc.changePct.toFixed(2)+'%' : '—';
@@ -978,7 +978,7 @@ function renderPortfolio() {
     }).join('') : '<div style="color:var(--text3);font-size:13px;padding:8px 0">尚無基金</div>'}
     <div style="height:20px"></div>`;
 
-  // 延遲觸發每張股票卡的 AI 快速建議（避免一次太多請求）
+  // 延遲觸發每張股票卡的 AI 快速建議(避免一次太多請求)
   setTimeout(function() {
     const allStocks = [...(acc.stocks||[])];
     allStocks.forEach(function(s, i) {
@@ -1007,7 +1007,7 @@ function runBatchDiag() {
 
   var batchPrompt = '你是資深台灣股市經理人。今日大盤：加權'+(_taiexAI?(_taiexAI.changePct>=0?'+':'')+_taiexAI.changePct.toFixed(2)+'%':'—')+' 費半'+(_soxAI?(_soxAI.changePct>=0?'+':'')+_soxAI.changePct.toFixed(2)+'%':'—')+'\n\n'
     +'持倉清單：\n'+stockSummary+'\n\n'
-    +'請對每支股票給出健診，回覆JSON陣列（只回JSON，不要其他文字）：\n'
+    +'請對每支股票給出健診，回覆JSON陣列(只回JSON，不要其他文字)：\n'
     +'[{"code":"代碼","action":"加倉/續抱/觀察/減碼/停損","reason":"理由一句話含基本面或技術面判斷"}]';
 
   callAI(batchPrompt, function(text) {
@@ -1063,11 +1063,11 @@ async function openDailyReport() {
   const _t=gP('TAIEX'),_s=gP('^SOX'),_s5=gP('^GSPC'),_tmc=gP('2330'),_nas=gP('^IXIC');
   const today = new Date().toLocaleDateString('zh-TW');
 
-  const marketData = '加權指數：'+(_t?_t.price?.toLocaleString()+'點（'+(_t.changePct>=0?'+':'')+_t.changePct?.toFixed(2)+'%）':'—')
+  const marketData = '加權指數：'+(_t?_t.price?.toLocaleString()+'點('+(_t.changePct>=0?'+':'')+_t.changePct?.toFixed(2)+'%)':'—')
     +'\n費半：'+(_s?(_s.changePct>=0?'+':'')+_s.changePct?.toFixed(2)+'%':'—')
     +'\nS&P500：'+(_s5?(_s5.changePct>=0?'+':'')+_s5.changePct?.toFixed(2)+'%':'—')
     +'\n那斯達克：'+(_nas?(_nas.changePct>=0?'+':'')+_nas.changePct?.toFixed(2)+'%':'—')
-    +'\n台積電：'+(_tmc?'$'+_tmc.price?.toFixed(0)+'（'+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%）':'—');
+    +'\n台積電：'+(_tmc?'$'+_tmc.price?.toFixed(0)+'('+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%)':'—');
 
   // ── 抓台股AI概念股即時價格 ──────────────────────────────────────
   const TW_AI_CODES = ['2330','2379','2454','3711','6669','3034','2308','2317','6770','3443','2382','4938','3035','6415','2303'];
@@ -1112,14 +1112,14 @@ async function openDailyReport() {
     +'【今日台股AI概念股即時報價】\n'+twPriceLines+'\n\n'
     +'【任務一：台股AI精選 5~10檔】\n'
     +'請從上方清單中篩選真正受惠AI趨勢的標的，涵蓋半導體、AI伺服器、散熱、先進封裝、AI應用等族群。\n'
-    +'財務數據（本益比、EPS、毛利率）請用你的訓練知識，但股價必須參考上方今日實際報價。\n'
+    +'財務數據(本益比、EPS、毛利率)請用你的訓練知識，但股價必須參考上方今日實際報價。\n'
     + framework;
 
   const usPrompt = '你是擁有50年實戰經驗的資深股票研究員。今天是'+today+'。\n今日市場：\n'+marketData+'\n\n'
     +'【今日美股AI概念股即時報價】\n'+usPriceLines+'\n\n'
     +'【任務二：美股AI精選 5~10檔】\n'
     +'請從上方清單中篩選真正受惠AI趨勢的標的，涵蓋算力、雲端、AI應用、AI基礎設施、半導體等領域。\n'
-    +'財務數據（本益比、EPS、毛利率）請用你的訓練知識，但股價必須參考上方今日實際報價。\n'
+    +'財務數據(本益比、EPS、毛利率)請用你的訓練知識，但股價必須參考上方今日實際報價。\n'
     + framework;
 
   function formatReport(text) {
@@ -1160,7 +1160,7 @@ function renderAI() {
   // 台股盤中：9:00-13:30，盤後：13:30後
   const isTWSEOpen  = hour >= 9 && (hour < 13 || (hour === 13 && now.getMinutes() < 30));
   const isTWSEAfter = hour >= 13 && (hour > 13 || now.getMinutes() >= 30);
-  // 美股盤中（台灣時間）：夏令 21:30-04:00，冬令 22:30-05:00
+  // 美股盤中(台灣時間)：夏令 21:30-04:00，冬令 22:30-05:00
   const isUSOpen = hour >= 21 || hour < 5;
 
   // 即時數據
@@ -1209,13 +1209,13 @@ function renderAI() {
       } else {
         parts.push(`【操作建議】台股盤整，量縮觀望。建議持股靜待，不宜追高殺低，等待明確方向再行動。`);
       }
-      // 明日展望（結合美股夜盤）
+      // 明日展望(結合美股夜盤)
       const usAvg2 = ((sox?.changePct||0) + (nasdaq?.changePct||0) + (sp500?.changePct||0)) / 3;
       if (isUSOpen && (sox||sp500)) {
-        parts.push(`【明日展望】美股夜盤費半${usAvg2>0.5?`強勢（費半${sox?(sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%':'—'}），台股明日偏多，半導體族群可提前關注，逢低布局。`:usAvg2<-0.5?`走弱（費半${sox?(sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%':'—'}），台股明日偏空，建議降低持股比例，保留現金。`:`小幅震盪，台股明日方向不明，以選股取代選市，聚焦業績成長個股。`}`);
+        parts.push(`【明日展望】美股夜盤費半${usAvg2>0.5?`強勢(費半${sox?(sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%':'—'})，台股明日偏多，半導體族群可提前關注，逢低布局。`:usAvg2<-0.5?`走弱(費半${sox?(sox.changePct>=0?'+':'')+sox.changePct.toFixed(2)+'%':'—'})，台股明日偏空，建議降低持股比例，保留現金。`:`小幅震盪，台股明日方向不明，以選股取代選市，聚焦業績成長個股。`}`);
       }
     }
-    // 盤前（台指期夜盤）
+    // 盤前(台指期夜盤)
     else {
       if (txf) parts.push(`【台指期夜盤】${txf.price?.toLocaleString()||'—'} 點，${txf.changePct>=0?'+':' '}${txf.changePct?.toFixed(2)||0}%，預示今日台股開盤方向。`);
       if (tsm) parts.push(`台積電ADR ${tsm.changePct>=0?'收漲':'收跌'} ${Math.abs(tsm.changePct).toFixed(2)}%，對今日台積電走勢有指標意義。`);
@@ -1262,23 +1262,23 @@ function renderAI() {
       <p style="font-size:13px;line-height:1.85;color:var(--text)">${buildAnalysis()}</p>
     </div>
 
-    <!-- AI 族群結論（即時） -->
+    <!-- AI 族群結論(即時) -->
     <div class="st">📊 AI 族群趨勢結論</div>
     <div class="card" id="sector-card">
       <div style="padding:16px;text-align:center;color:var(--text3);font-size:13px">⏳ AI 分析族群趨勢中...</div>
     </div>`;
 
-  // Gemini AI 族群趨勢（延遲確保 DOM 已渲染）
+  // Gemini AI 族群趨勢(延遲確保 DOM 已渲染)
   setTimeout(function() {
   const _tS=gP('TAIEX'),_sS=gP('^SOX'),_s5=gP('^GSPC'),_tmc=gP('2330');
   const sEl=document.getElementById('sector-card');
   callAI(
     '你是台灣股市分析師，今日數據：\n'
-    +'加權指數：'+(_tS?_tS.price?.toLocaleString()+'點（'+(_tS.changePct>=0?'+':'')+_tS.changePct?.toFixed(2)+'%）':'—')+'\n'
-    +'台積電：'+(_tmc?'$'+_tmc.price?.toFixed(0)+'（'+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%）':'—')+'\n'
+    +'加權指數：'+(_tS?_tS.price?.toLocaleString()+'點('+(_tS.changePct>=0?'+':'')+_tS.changePct?.toFixed(2)+'%)':'—')+'\n'
+    +'台積電：'+(_tmc?'$'+_tmc.price?.toFixed(0)+'('+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%)':'—')+'\n'
     +'費半：'+(_sS?(_sS.changePct>=0?'+':'')+_sS.changePct?.toFixed(2)+'%':'—')+'\n'
     +'S&P500：'+(_s5?(_s5.changePct>=0?'+':'')+_s5.changePct?.toFixed(2)+'%':'—')+'\n\n'
-    +'請用繁體中文給出台股族群趨勢結論（每項1-2句）：\n🚀 多頭族群（可布局）：\n👁 觀察族群（等訊號）：\n⚠️ 迴避族群（暫不碰）：\n💡 本週操作重點：',
+    +'請用繁體中文給出台股族群趨勢結論(每項1-2句)：\n🚀 多頭族群(可布局)：\n👁 觀察族群(等訊號)：\n⚠️ 迴避族群(暫不碰)：\n💡 本週操作重點：',
     function(text){
       if(!sEl)return;
       sEl.innerHTML='<div style="font-size:13px;line-height:1.9;color:var(--text)">'
@@ -1298,11 +1298,11 @@ function renderAI() {
     <div id="ai-recs-loading" style="padding:20px;text-align:center;color:var(--text3);font-size:13px">⏳ AI 選股中...</div>
     <div id="ai-recs-ready" style="display:none">
       <div style="background:#f0fdf4;border-radius:10px;padding:10px 12px;margin-bottom:10px">
-        <div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:8px">✅ 現價符合入場區間（可考慮進場）</div>
+        <div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:8px">✅ 現價符合入場區間(可考慮進場)</div>
         <div id="recs-in-zone"></div>
       </div>
       <div style="background:#fffbeb;border-radius:10px;padding:10px 12px">
-        <div style="font-size:11px;font-weight:700;color:#92670a;margin-bottom:8px">⏳ 現價高於建議區（等待回測）</div>
+        <div style="font-size:11px;font-weight:700;color:#92670a;margin-bottom:8px">⏳ 現價高於建議區(等待回測)</div>
         <div id="recs-wait-zone"></div>
       </div>
     </div>
@@ -1335,7 +1335,7 @@ function renderAI() {
     }).join('')}
     <div style="height:20px"></div>`;
 
-  // ── AI 今日選股（Groq 動態生成）──────────────────────────
+  // ── AI 今日選股(Groq 動態生成)──────────────────────────
   (function() {
     var titleEl = document.getElementById('recs-title');
     var today = (now.getMonth()+1)+'月'+now.getDate()+'日';
@@ -1349,11 +1349,11 @@ function renderAI() {
       .slice(0,30).join(' ');
     var rPrompt = '你是一位資深台灣股市基金經理人，勝率長期高於90%。今天是'+today+'。\n'
       +'今日市場數據：\n'
-      +'加權指數：'+(_t?_t.price?.toLocaleString()+'點（'+(_t.changePct>=0?'+':'')+_t.changePct?.toFixed(2)+'%）':'—')+'\n'
+      +'加權指數：'+(_t?_t.price?.toLocaleString()+'點('+(_t.changePct>=0?'+':'')+_t.changePct?.toFixed(2)+'%)':'—')+'\n'
       +'費城半導體：'+(_s?(_s.changePct>=0?'+':'')+_s.changePct?.toFixed(2)+'%':'—')+'\n'
       +'S&P500：'+(_s5?(_s5.changePct>=0?'+':'')+_s5.changePct?.toFixed(2)+'%':'—')+'\n'
-      +'台積電：'+(_tmc?'$'+_tmc.price?.toFixed(0)+'（'+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%）':'—')+'\n'
-      +(knownPrices?'已知個股現價（請以此為準）：'+knownPrices+'\n':'')+'\n'
+      +'台積電：'+(_tmc?'$'+_tmc.price?.toFixed(0)+'('+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%)':'—')+'\n'
+      +(knownPrices?'已知個股現價(請以此為準)：'+knownPrices+'\n':'')+'\n'
       +'請以下列專業框架選出10支台股標的：\n'
       +'【分析框架】\n'
       +'1. 商業模式與護城河：產品/服務是否具競爭優勢\n'
@@ -1371,22 +1371,22 @@ function renderAI() {
       +'【回覆格式】只回JSON陣列，10個物件，不要任何說明文字：\n'
       +'{"g":1或2,"code":"台股代碼","name":"名稱","currentPrice":合理現價,"entry":建議入場價,"stop":停損價,"score":評分,"r":"30字內的核心推薦理由，含估值、動能、籌碼三要素"}\n'
       +'【分組規則】\n'
-      +'g=1（可進場，5支）：entry<=currentPrice，技術面已啟動，籌碼偏多\n'
-      +'g=2（等待，5支）：entry<currentPrice，基本面優但現價偏高需等回測\n'
+      +'g=1(可進場，5支)：entry<=currentPrice，技術面已啟動，籌碼偏多\n'
+      +'g=2(等待，5支)：entry<currentPrice，基本面優但現價偏高需等回測\n'
       +'【價格規則】\n'
       +'entry必須在currentPrice的±15%以內，stop必須是entry的88-95%\n'
       +'【選股任務】請根據以上四大面向分析，推薦10支台股標的，只回JSON陣列：\n'
       +'[{"g":1,"code":"2330","name":"台積電","entry":2250,"stop":2100,"target":2600,"score":95,"basis":"基本面：CoWoS滿載EPS年增25%。技術面：站上季線量增。籌碼面：外資連10日買超。市場面：AI伺服器需求強勁。"},...]\n'
       +'【欄位說明】\n'
-      +'g=1（可進場5支）：四大面向均偏多，entry設在當前合理買點\n'
-      +'g=2（等待5支）：基本面佳但技術偏高，entry設在合理回測買點\n'
-      +'entry：建議入場價（參考均線支撐位，必須合理）\n'
-      +'stop：停損價（低於entry 7-12%，設在技術支撐破位點）\n'
-      +'target：目標價（上漲空間15-30%）\n'
-      +'signal：中長線轉強訊號出現的價格（突破此價確認趨勢反轉，通常是季線或年線）\n'
-      +'resist：目前最重要的壓力區價格（短期上漲阻力，通常是前高或均線壓力）\n'
-      +'breakout：突破此價確認多頭趨勢（通常是前高整理區或年線）\n'
-      +'basis：四大面向分析摘要（基本面/技術面/籌碼面/市場面各1句）\n'
+      +'g=1(可進場5支)：四大面向均偏多，entry設在當前合理買點\n'
+      +'g=2(等待5支)：基本面佳但技術偏高，entry設在合理回測買點\n'
+      +'entry：建議入場價(參考均線支撐位，必須合理)\n'
+      +'stop：停損價(低於entry 7-12%，設在技術支撐破位點)\n'
+      +'target：目標價(上漲空間15-30%)\n'
+      +'signal：中長線轉強訊號出現的價格(突破此價確認趨勢反轉，通常是季線或年線)\n'
+      +'resist：目前最重要的壓力區價格(短期上漲阻力，通常是前高或均線壓力)\n'
+      +'breakout：突破此價確認多頭趨勢(通常是前高整理區或年線)\n'
+      +'basis：四大面向分析摘要(基本面/技術面/籌碼面/市場面各1句)\n'
       +'code必須是真實台股代碼不可重複，name與code完全對應\n'
       +'只回JSON陣列，不要其他任何文字';
 
@@ -1413,7 +1413,7 @@ function renderAI() {
           var cp = p ? p.price : null;
           var sc = r.score>=80?'#16a34a':r.score>=65?'#d97706':'#888';
 
-          // 驗證 AI 給的入場價合理性（必須在現價 70%~130% 以內）
+          // 驗證 AI 給的入場價合理性(必須在現價 70%~130% 以內)
           var entry = r.entry || 0;
           var stop  = r.stop  || 0;
           var target= r.target|| 0;
@@ -1477,7 +1477,7 @@ function renderAI() {
     });
   })();
 
-  // 持倉健診改為手動觸發（點「AI 健診」按鈕），見 runBatchDiag()
+  // 持倉健診改為手動觸發(點「AI 健診」按鈕)，見 runBatchDiag()
   if (false) {
     var stockSummary = _stocks.map(function(s,i) {
       var p = gP(s.code);
@@ -1487,7 +1487,7 @@ function renderAI() {
     }).join('\n');
     var batchPrompt = '你是資深台灣股市經理人。今日大盤：加權'+(_taiexAI?(_taiexAI.changePct>=0?'+':'')+_taiexAI.changePct.toFixed(2)+'%':'—')+' 費半'+(_soxAI?(_soxAI.changePct>=0?'+':'')+_soxAI.changePct.toFixed(2)+'%':'—')+'\n\n'
       +'持倉清單：\n'+stockSummary+'\n\n'
-      +'請對每支股票給出健診，回覆JSON陣列（只回JSON，不要其他文字）：\n'
+      +'請對每支股票給出健診，回覆JSON陣列(只回JSON，不要其他文字)：\n'
       +'[{"code":"代碼","action":"加倉/續抱/觀察/減碼/停損","reason":"理由一句話含基本面或技術面判斷"}]';
     callAI(batchPrompt, function(text) {
       try {
@@ -1499,12 +1499,12 @@ function renderAI() {
           if (si < 0) return;
           var el = document.getElementById('diag-text-'+si);
           if (el) el.innerHTML = '<b>'+item.action+'</b> — '+item.reason;
-          // 同步更新標籤（AI分析頁和持倉頁）
+          // 同步更新標籤(AI分析頁和持倉頁)
           var am = {'加倉':'add','續抱':'hold','觀察':'watch','減碼':'sell','停損':'stop'};
           var actKey = am[item.action]||'hold';
           var tagEl = document.getElementById('diag-tag-'+si);
           if (tagEl) tagEl.innerHTML = tagH(actKey);
-          // 同時更新持倉頁的標籤（如果有的話）
+          // 同時更新持倉頁的標籤(如果有的話)
           var pfTag = document.getElementById('pf-tag-'+item.code);
           if (pfTag) pfTag.innerHTML = tagH(actKey);
         });
@@ -1572,25 +1572,25 @@ async function renderNews() {
 const DEFAULT_PROMPTS = {
   kline: `你是資深技術分析師，精通葛蘭碧八大法則。今天是{today}。
 
-以下是{name}（{code}）的60日K線完整技術數據：
+以下是{name}({code})的60日K線完整技術數據：
 {klineData}
 
 請按以下架構分析：
-【1. 均線系統（葛蘭碧法則）】排列狀態、現價位置、符合哪條法則、短中長期趨勢
+【1. 均線系統(葛蘭碧法則)】排列狀態、現價位置、符合哪條法則、短中長期趨勢
 【2. 動能指標】RSI超買超賣、KD黃金/死亡交叉、MACD方向與柱狀體
 【3. 布林通道+乖離率】現價在通道位置、波動狀態
 【4. 量價關係】量能訊號解讀
-【5. K線評分 0~100】給分並說明（80~100強勢多頭/60~79偏多/40~59中性/20~39偏空/0~19弱勢）
+【5. K線評分 0~100】給分並說明(80~100強勢多頭/60~79偏多/40~59中性/20~39偏空/0~19弱勢)
 【6. 關鍵價位】第一支撐、第二支撐、停損位、翻多價位、目標價
 
 繁體中文，格式清晰，適合手機閱讀。`,
 
   company: `扮演資深股票研究分析師。今天是{today}。
-{name}（{code}）{price}
+{name}({code}){price}
 
 請編寫綜合投資分析報告，詳細、客觀且以數據為導向，使用過去五個完整財政年度和TTM數據：
 
-【1. 執行摘要】業務概述（1句）、投資論點（2-3句）、買入/持有/賣出、主要催化劑與風險
+【1. 執行摘要】業務概述(1句)、投資論點(2-3句)、買入/持有/賣出、主要催化劑與風險
 【2. 財務表現與健康狀況】5年+TTM營收成長、毛利率、淨利率、資產負債表強弱、FCF是否持續為正
 【3. 估值分析】本益比/P/S/P/B/EV/EBITDA，對比5年歷史均值、產業平均、前3競爭對手，結論：高估/低估/合理
 【4. 競爭護城河】核心業務、競爭優勢來源、護城河耐久性
@@ -1609,7 +1609,7 @@ const DEFAULT_PROMPTS = {
 【今日台股AI概念股即時報價】
 {twPriceLines}
 
-【分析規則（必須嚴格遵守）】
+【分析規則(必須嚴格遵守)】
 1. 股價：必須使用上方今日即時報價，禁止猜測
 2. 估值：用今日股價÷近期EPS=實際本益比，對照估值基準
 3. 買進區間：必須以合理本益比推算，不可高於合理上緣
@@ -1617,12 +1617,12 @@ const DEFAULT_PROMPTS = {
 5. 股價超出合理區間：只能寫「等待回檔」，不可寫「可買進」
 
 請依框架分析每檔：
-① 受惠AI核心原因（一句話）
+① 受惠AI核心原因(一句話)
 ② 今日股價、實際本益比、合理區間比較
 ③ 估值結論：便宜/合理/偏高/明顯過熱
 ④ 建議操作：可分批買進/等待回檔至XX元/觀察/不建議追高
 
-最後選出最值得研究的3檔（必須估值合理或便宜），提供買進價位區間、分批方式、停損條件、主要風險。
+最後選出最值得研究的3檔(必須估值合理或便宜)，提供買進價位區間、分批方式、停損條件、主要風險。
 並列出「今日過熱、不建議追高」清單。
 
 格式清晰，適合手機閱讀，繁體中文。`,
@@ -1635,7 +1635,7 @@ const DEFAULT_PROMPTS = {
 【今日美股AI概念股即時報價】
 {usPriceLines}
 
-【分析規則（必須嚴格遵守）】
+【分析規則(必須嚴格遵守)】
 1. 股價：必須使用上方今日即時報價，禁止猜測
 2. 估值：用今日股價÷TTM EPS=實際本益比，對照估值基準
 3. 若今日報價超出合理區間上緣，明確標註「目前估值偏高」
@@ -1657,10 +1657,10 @@ const DEFAULT_PROMPTS = {
 持倉清單：
 {stockList}
 
-請對每支股票給出健診，回覆JSON陣列（只回JSON，不要其他文字）：
+請對每支股票給出健診，回覆JSON陣列(只回JSON，不要其他文字)：
 [{"code":"代碼","action":"加倉/續抱/觀察/減碼/停損","reason":"理由一句話含基本面或技術面判斷"}]`,
 
-  opening: `你是台股分析師，請給出{tomorrow}台股開盤建議（繁體中文，直接給結論，2-3句）：
+  opening: `你是台股分析師，請給出{tomorrow}台股開盤建議(繁體中文，直接給結論，2-3句)：
 S&P500：{sp500}
 那斯達克：{nasdaq}
 費半：{sox}
@@ -1675,10 +1675,10 @@ S&P500：{sp500}
 費半：{sox}
 S&P500：{sp500}
 
-請用繁體中文給出台股族群趨勢結論（每項1-2句）：
-🚀 多頭族群（可布局）：
-👁 觀察族群（等訊號）：
-⚠️ 迴避族群（暫不碰）：
+請用繁體中文給出台股族群趨勢結論(每項1-2句)：
+🚀 多頭族群(可布局)：
+👁 觀察族群(等訊號)：
+⚠️ 迴避族群(暫不碰)：
 💡 本週操作重點：`,
 
   stockPick: `你是一位資深台灣股市基金經理人，勝率長期高於90%。今天是{today}。
@@ -1701,14 +1701,14 @@ S&P500：{sp500}
 8. 核心風險：主要下行風險一句話
 
 【回覆格式】只回JSON陣列，10個物件，不要任何說明文字：
-g=1（可進場5支）：四大面向均偏多，entry設在當前合理買點
-g=2（等待5支）：基本面佳但技術偏高，entry設在合理回測買點
+g=1(可進場5支)：四大面向均偏多，entry設在當前合理買點
+g=2(等待5支)：基本面佳但技術偏高，entry設在合理回測買點
 [{"g":1,"code":"台股代碼","name":"名稱","entry":建議入場價,"stop":停損價,"target":目標價,"score":評分,"basis":"基本面/技術面/籌碼面/市場面各1句"}]
 
 code必須是真實台股代碼不可重複，name與code完全對應。只回JSON陣列，不要其他任何文字。`,
 
   indivDiag: `你是台灣股市分析師，請用繁體中文分析以下持股，格式簡潔適合手機閱讀。
-股票：{name}（{code}）
+股票：{name}({code})
 類型：{type}
 持有成本：\${cost}
 現價：{price}
@@ -1721,28 +1721,28 @@ code必須是真實台股代碼不可重複，name與code完全對應。只回JS
 {etfTemplate}`,
 
   recDiag: `你是一位擁有50年實戰經驗的資深股票研究分析師，保守、理性、數據導向。
-請針對以下推薦股票撰寫完整投資分析報告（繁體中文，格式清晰適合手機閱讀）：
+請針對以下推薦股票撰寫完整投資分析報告(繁體中文，格式清晰適合手機閱讀)：
 
 【股票資訊】
-股票：{name}（{code}）
+股票：{name}({code})
 現價：{price} 今日：{changePct}
 建議入場：{entryRange} 停損：{stop}
 大盤：{taiex}
 {klineData}
 
 請依以下架構分析：
-【執行摘要】業務概述+投資論點（2-3句）+買入/持有/賣出結論+主要催化劑與風險
+【執行摘要】業務概述+投資論點(2-3句)+買入/持有/賣出結論+主要催化劑與風險
 【財務表現】近年營收成長+毛利率趨勢+EPS+FCF現金流狀況
 【估值分析】本益比/市淨率 vs 歷史均值與同業，高估/低估/合理定價
 【競爭護城河】核心業務+競爭優勢來源+護城河耐久性
 【成長展望】主要成長催化劑+TAM市場機會+未來12個月展望
 【籌碼面】外資、投信、主力近期動向+內部人持股
 【技術面+K線】結合K線數據：均線多空排列+趨勢強弱+RSI+量價關係+支撐壓力位
-【風險分析】公司特有風險（3項）+系統性風險（3項）
+【風險分析】公司特有風險(3項)+系統性風險(3項)
 【關鍵技術訊號】
-轉強訊號：\$XXX（中長線趨勢反轉確認點，說明原因）
-重要壓力：\$XXX（目前最重要短線阻力，說明原因）
-多頭確認：\$XXX（突破此價確認多頭走勢，說明原因）
+轉強訊號：\$XXX(中長線趨勢反轉確認點，說明原因)
+重要壓力：\$XXX(目前最重要短線阻力，說明原因)
+多頭確認：\$XXX(突破此價確認多頭走勢，說明原因)
 【最終建議】買入/持有/賣出評級+合理入場價+停損條件+目標價+主要風險提醒`,
 
   signal: `今天是{date}，台股明日開盤預測。市場數據：{mktData}
@@ -1750,15 +1750,15 @@ code必須是真實台股代碼不可重複，name與code完全對應。只回JS
 請只回JSON，格式：
 {"top":["族群1","族群2","族群3"],"weak":["族群1","族群2"],"strategy":["策略一","策略二","策略三"]}
 
-top=最強3族群（2-3字），weak=最弱2族群（2-3字），strategy=今日操作策略3條（5字內每條）。只回JSON不要其他文字。`,
+top=最強3族群(2-3字)，weak=最弱2族群(2-3字)，strategy=今日操作策略3條(5字內每條)。只回JSON不要其他文字。`,
 
   framework: `以上為今日實際即時股價，請基於這些真實價格評估估值合理性。
 請用保守、理性、數據導向方式分析，從以下角度評估每檔：
-① 真正受惠AI的原因（商業模式與護城河）
-② 近年營收與獲利趨勢（毛利率、EPS成長）
-③ 財務體質（現金流、負債比）
+① 真正受惠AI的原因(商業模式與護城河)
+② 近年營收與獲利趨勢(毛利率、EPS成長)
+③ 財務體質(現金流、負債比)
 ④ 產業地位與競爭優勢
-⑤ 估值合理性（本益比、PBR，結合上方真實股價判斷現在貴或便宜）
+⑤ 估值合理性(本益比、PBR，結合上方真實股價判斷現在貴或便宜)
 ⑥ 建議操作：可分批買進 / 等待回檔 / 觀察 / 避開
 
 最後選出最值得優先研究的3檔，提供：合理買進區間、分批布局方式、停損條件、主要風險
@@ -1791,11 +1791,11 @@ NASDAQ漲跌幅：{nasdaq_change}
 請評估目前市場情緒。
 
 輸出格式：
-🔥 市場溫度：XX度（0~100）
-📊 市場情緒：（極度恐慌 / 恐慌 / 中性 / 樂觀 / 極度樂觀）
-💰 資金流向：（一句話說明）
-⚠️ 風險等級：（低 / 中 / 高）
-🎯 結論：（50字內）
+🔥 市場溫度：XX度(0~100)
+📊 市場情緒：(極度恐慌 / 恐慌 / 中性 / 樂觀 / 極度樂觀)
+💰 資金流向：(一句話說明)
+⚠️ 風險等級：(低 / 中 / 高)
+🎯 結論：(50字內)
 
 規則：0~20 極度恐慌｜21~40 恐慌｜41~60 中性｜61~80 樂觀｜81~100 極度樂觀`
 };
@@ -1826,8 +1826,8 @@ function renderAlert() {
   const TOOLS = [
     { key: 'signal',      icon: '🌅', name: '明日台股燈號',    desc: '總覽頁「明日台股燈號」族群+策略',           vars: '{date} {mktData}' },
     { key: 'thermo',      icon: '🌡️', name: '市場溫度計',      desc: '總覽頁「市場溫度計」熱度與風險分析',        vars: '{taiex} {taiex_change} {tsmc} {tsmc_change} {nasdaq} {nasdaq_change} {sox} {sox_change}' },
-    { key: 'framework',   icon: '📋', name: '每日AI報告框架',   desc: '每日AI投資報告的分析框架（台股+美股共用）',  vars: '（無，直接作為分析指示）' },
-    { key: 'stockSuggest',icon: '💬', name: '持倉卡片AI建議',   desc: '持倉頁每張股票卡下方的 AI建議（續抱/加碼/減碼/停損）', vars: '{name} {code} {cost} {price} {roi} {taiex} {sox}' },
+    { key: 'framework',   icon: '📋', name: '每日AI報告框架',   desc: '每日AI投資報告的分析框架(台股+美股共用)',  vars: '(無，直接作為分析指示)' },
+    { key: 'stockSuggest',icon: '💬', name: '持倉卡片AI建議',   desc: '持倉頁每張股票卡下方的 AI建議(續抱/加碼/減碼/停損)', vars: '{name} {code} {cost} {price} {roi} {taiex} {sox}' },
     { key: 'opening',     icon: '🌄', name: '明日開盤建議',    desc: '總覽頁頂部「明日開盤建議」',                vars: '{tomorrow} {sp500} {nasdaq} {sox} {tsm} {taiex}' },
     { key: 'sector',      icon: '📊', name: 'AI族群趨勢結論',  desc: 'AI分析頁「AI族群趨勢結論」',                vars: '{taiex} {tsmc} {sox} {sp500}' },
     { key: 'stockPick',   icon: '🎯', name: 'AI今日選股',      desc: 'AI分析頁「AI今日選股」',                    vars: '{today} {taiex} {sox} {sp500} {tsmc} {knownPrices}' },
@@ -2006,34 +2006,34 @@ function openDetail(code) {
           +'60日最高：$'+kl.high60+' / 最低：$'+kl.low60+'\n'
           +'MA5：$'+(kl.ma5||'—')+' / MA10：$'+(kl.ma10||'—')+' / MA20：$'+(kl.ma20||'—')+' / MA60：$'+(kl.ma60||'—')+'\n'
           +'RSI(14)：'+kl.rsi+'\n'
-          +'成交量比（今日/均量）：'+kl.volRatio+'x\n'
+          +'成交量比(今日/均量)：'+kl.volRatio+'x\n'
           +'現價距60日高點：'+((kl.latest-kl.high60)/kl.high60*100).toFixed(1)+'%\n'
           +'現價距60日低點：+'+((kl.latest-kl.low60)/kl.low60*100).toFixed(1)+'%\n';
       }
       return '你是台灣股市分析師，請用繁體中文分析以下持股，格式簡潔適合手機閱讀。\n'
-        +'股票：'+s.name+'（'+s.code+'）\n'
+        +'股票：'+s.name+'('+s.code+')\n'
         +'類型：'+(s.type==='stock'?'個股':'ETF')+'\n'
         +'持有成本：$'+s.cost+'\n'
         +'現價：'+(p?'$'+p.price.toFixed(2):'載入中')+'\n'
         +'今日漲跌：'+(p?(p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%':'—')+'\n'
-        +'持有損益：'+(pct>=0?'+':'')+pct.toFixed(1)+'%（'+(pnl>=0?'+':'')+'NT$'+Math.abs(pnl).toLocaleString()+'）\n'
-        +'加權指數：'+(_tD?_tD.price?.toLocaleString()+'點（'+(_tD.changePct>=0?'+':'')+_tD.changePct?.toFixed(2)+'%）':'—')+'\n'
+        +'持有損益：'+(pct>=0?'+':'')+pct.toFixed(1)+'%('+(pnl>=0?'+':'')+'NT$'+Math.abs(pnl).toLocaleString()+')\n'
+        +'加權指數：'+(_tD?_tD.price?.toLocaleString()+'點('+(_tD.changePct>=0?'+':'')+_tD.changePct?.toFixed(2)+'%)':'—')+'\n'
         +'費半：'+(_sD?(_sD.changePct>=0?'+':'')+_sD.changePct?.toFixed(2)+'%':'—')+'\n'
         + kStr
         +(s.type==='etf'
         ? '\n請分析：【執行摘要】買入/持有/賣出 【財務表現】追蹤指數與殖利率 【估值】是否合理 【風險】主要風險 【操作建議】明確建議含目標價停損點\n\n'
-          +'最後請用固定格式輸出技術訊號：\n轉強訊號：$XXX（說明）\n重要壓力：$XXX（說明）\n多頭確認：$XXX（說明）'
+          +'最後請用固定格式輸出技術訊號：\n轉強訊號：$XXX(說明)\n重要壓力：$XXX(說明)\n多頭確認：$XXX(說明)'
         : '\n你的任務是撰寫一份綜合投資分析報告，保守、理性、數據導向，結合以下K線技術數據：\n'
           + kStr
-          +'\n請依以下架構分析（每項2-3句）：\n\n'
+          +'\n請依以下架構分析(每項2-3句)：\n\n'
           +'【執行摘要】\n'
-          +'簡述公司業務。陳述整體投資論點（2-3句）。以目前估值給出買入/持有/賣出結論。總結主要催化劑與風險。\n\n'
+          +'簡述公司業務。陳述整體投資論點(2-3句)。以目前估值給出買入/持有/賣出結論。總結主要催化劑與風險。\n\n'
           +'【財務表現與健康狀況】\n'
           +'損益表：近5年營收成長、毛利率、營業利潤率趨勢。資產負債表：債務水平、現金狀況是否強健。現金流：FCF是否持續為正。\n\n'
           +'【估值分析】\n'
           +'比較本益比、市銷率、市淨率與5年歷史均值及同業。結論：高估/低估/合理定價。\n\n'
           +'【商業模式與競爭護城河】\n'
-          +'核心業務部門及收入貢獻。競爭優勢來源（品牌/專利/網絡效應/成本領先）。護城河耐久性評估。\n\n'
+          +'核心業務部門及收入貢獻。競爭優勢來源(品牌/專利/網絡效應/成本領先)。護城河耐久性評估。\n\n'
           +'【成長策略與未來展望】\n'
           +'主要成長催化劑。TAM市場機會與市佔潛力。\n\n'
           +'【籌碼面】\n'
@@ -2041,14 +2041,14 @@ function openDetail(code) {
           +'【技術面+K線分析】\n'
           +'結合上方K線數據：均線多空排列、趨勢強弱、RSI超買超賣、量價關係、支撐壓力位。\n\n'
           +'【風險分析】\n'
-          +'公司特有風險（前3大）。系統性風險（前3大外部風險）。\n\n'
+          +'公司特有風險(前3大)。系統性風險(前3大外部風險)。\n\n'
           +'【關鍵技術訊號】\n'
           +'根據以上完整分析，必須用以下固定格式輸出三個關鍵價格：\n'
-          +'轉強訊號：$XXX（中長線趨勢反轉確認點，說明原因）\n'
-          +'重要壓力：$XXX（目前最重要短線阻力區，說明原因）\n'
-          +'多頭確認：$XXX（突破此價確認多頭走勢，說明原因）\n\n'
+          +'轉強訊號：$XXX(中長線趨勢反轉確認點，說明原因)\n'
+          +'重要壓力：$XXX(目前最重要短線阻力區，說明原因)\n'
+          +'多頭確認：$XXX(突破此價確認多頭走勢，說明原因)\n\n'
           +'【最終建議】\n'
-          +'綜合以上所有分析給出買入/持有/賣出評級。合理入場價（參考估值與技術面）。停損條件（設在技術支撐破位點）。目標價（基於成長動能與估值修復）。主要風險提醒。'
+          +'綜合以上所有分析給出買入/持有/賣出評級。合理入場價(參考估值與技術面)。停損條件(設在技術支撐破位點)。目標價(基於成長動能與估值修復)。主要風險提醒。'
       );
     }
 
@@ -2133,7 +2133,7 @@ function openAIDetail(code) {
   showPage('p-detail');
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
 
-  // API 即時分析推薦股（含 K 線）
+  // API 即時分析推薦股(含 K 線)
   setTimeout(function() {
     var _rp = gP(r.code);
     var recEl = document.getElementById('rec-ai-result');
@@ -2149,27 +2149,27 @@ function openAIDetail(code) {
       }
       var _taiex = gP('TAIEX');
       return '你是一位擁有50年實戰經驗的資深股票研究分析師，保守、理性、數據導向。\n'
-        +'請針對以下推薦股票撰寫完整投資分析報告（繁體中文，格式清晰適合手機閱讀）：\n\n'
+        +'請針對以下推薦股票撰寫完整投資分析報告(繁體中文，格式清晰適合手機閱讀)：\n\n'
         +'【股票資訊】\n'
-        +'股票：'+r.name+'（'+r.code+'）\n'
+        +'股票：'+r.name+'('+r.code+')\n'
         +'現價：'+(_rp?'$'+_rp.price.toFixed(2):'—')
         +'  今日：'+(_rp?(_rp.changePct>=0?'+':'')+_rp.changePct.toFixed(2)+'%':'—')+'\n'
         +'建議入場：$'+r.entryLow+' ~ $'+r.entryHigh+'  停損：$'+r.stop+'\n'
-        +'大盤：'+(_taiex?_taiex.price?.toLocaleString()+'點（'+(_taiex.changePct>=0?'+':'')+_taiex.changePct?.toFixed(2)+'%）':'—')+'\n'
+        +'大盤：'+(_taiex?_taiex.price?.toLocaleString()+'點('+(_taiex.changePct>=0?'+':'')+_taiex.changePct?.toFixed(2)+'%)':'—')+'\n'
         + kStr
         +'\n請依以下架構分析：\n\n'
-        +'【執行摘要】\n業務概述+投資論點（2-3句）+買入/持有/賣出結論+主要催化劑與風險\n\n'
+        +'【執行摘要】\n業務概述+投資論點(2-3句)+買入/持有/賣出結論+主要催化劑與風險\n\n'
         +'【財務表現】\n近年營收成長+毛利率趨勢+EPS+FCF現金流狀況\n\n'
         +'【估值分析】\n本益比/市淨率 vs 歷史均值與同業，高估/低估/合理定價\n\n'
-        +'【競爭護城河】\n核心業務+競爭優勢來源（品牌/專利/成本/網絡效應）+護城河耐久性\n\n'
+        +'【競爭護城河】\n核心業務+競爭優勢來源(品牌/專利/成本/網絡效應)+護城河耐久性\n\n'
         +'【成長展望】\n主要成長催化劑+TAM市場機會+未來12個月展望\n\n'
         +'【籌碼面】\n外資、投信、主力近期動向+內部人持股\n\n'
         +'【技術面+K線】\n結合K線數據：均線多空排列+趨勢強弱+RSI+量價關係+支撐壓力位\n\n'
-        +'【風險分析】\n公司特有風險（3項）+系統性風險（3項）\n\n'
+        +'【風險分析】\n公司特有風險(3項)+系統性風險(3項)\n\n'
         +'【關鍵技術訊號】\n根據以上完整分析，用固定格式輸出：\n'
-        +'轉強訊號：$XXX（中長線趨勢反轉確認點，說明原因）\n'
-        +'重要壓力：$XXX（目前最重要短線阻力，說明原因）\n'
-        +'多頭確認：$XXX（突破此價確認多頭走勢，說明原因）\n\n'
+        +'轉強訊號：$XXX(中長線趨勢反轉確認點，說明原因)\n'
+        +'重要壓力：$XXX(目前最重要短線阻力，說明原因)\n'
+        +'多頭確認：$XXX(突破此價確認多頭走勢，說明原因)\n\n'
         +'【最終建議】\n買入/持有/賣出評級+合理入場價+停損條件+目標價+主要風險提醒';
     }
 
@@ -2184,33 +2184,33 @@ function openAIDetail(code) {
     fetch('/api/kline?code='+r.code, {signal: AbortSignal.timeout(8000)})
       .then(function(res){ return res.json(); })
       .then(function(kl){
-        // 操作建議（簡短版）
+        // 操作建議(簡短版)
         if (recEl) callAI(buildRecPrompt(kl),
           function(t){ recEl.innerHTML='<div style="font-size:13px;line-height:1.85">'+formatAI(t)+'</div>'; },
           function(){ recEl.innerHTML='<span style="color:var(--text3)">分析載入失敗</span>'; }
         );
-        // 即時深度分析（完整框架版，延遲500ms讓操作建議先送）
+        // 即時深度分析(完整框架版，延遲500ms讓操作建議先送)
         setTimeout(function() {
           var deepEl = document.getElementById('rec-ai-card');
           if (!deepEl) return;
           var deepPrompt = '你是一位擁有50年實戰經驗的資深股票研究分析師，保守、理性、數據導向。\n'
-            +'請針對以下股票撰寫完整投資分析報告（繁體中文，格式清晰適合手機閱讀）：\n\n'
-            +'股票：'+r.name+'（'+r.code+'）\n'
+            +'請針對以下股票撰寫完整投資分析報告(繁體中文，格式清晰適合手機閱讀)：\n\n'
+            +'股票：'+r.name+'('+r.code+')\n'
             +'現價：'+(_rp?'$'+_rp.price.toFixed(2):'—')+'  今日：'+(_rp?(_rp.changePct>=0?'+':'')+_rp.changePct.toFixed(2)+'%':'—')+'\n'
             +(kl&&kl.ok?'近60日趨勢：'+(kl.trend60>=0?'+':'')+kl.trend60+'%  RSI：'+kl.rsi+'  MA20：$'+(kl.ma20||'—')+'  MA60：$'+(kl.ma60||'—')+'\n':'')
             +'\n請依以下架構分析：\n\n'
-            +'【執行摘要】業務概述+投資論點（2-3句）+買入/持有/賣出+主要催化劑\n\n'
+            +'【執行摘要】業務概述+投資論點(2-3句)+買入/持有/賣出+主要催化劑\n\n'
             +'【財務表現】近年營收成長+毛利率趨勢+EPS成長+FCF現金流\n\n'
             +'【估值分析】本益比/市淨率 vs 歷史均值與同業，結論：高估/低估/合理\n\n'
             +'【競爭護城河】核心業務+競爭優勢來源+護城河耐久性\n\n'
             +'【成長展望】主要成長催化劑+TAM市場機會+未來展望\n\n'
             +'【籌碼面】外資投信主力動向+內部人持股\n\n'
             +'【技術面+K線】均線多空排列+趨勢+RSI超買超賣+量價+支撐壓力\n\n'
-            +'【風險分析】公司特有風險（3項）+系統性風險（3項）\n\n'
-            +'【關鍵技術訊號】根據以上完整分析輸出（固定格式）：\n'
-            +'轉強訊號：$XXX（中長線趨勢反轉確認點，原因）\n'
-            +'重要壓力：$XXX（目前最重要短線阻力，原因）\n'
-            +'多頭確認：$XXX（突破此價確認多頭，原因）\n\n'
+            +'【風險分析】公司特有風險(3項)+系統性風險(3項)\n\n'
+            +'【關鍵技術訊號】根據以上完整分析輸出(固定格式)：\n'
+            +'轉強訊號：$XXX(中長線趨勢反轉確認點，原因)\n'
+            +'重要壓力：$XXX(目前最重要短線阻力，原因)\n'
+            +'多頭確認：$XXX(突破此價確認多頭，原因)\n\n'
             +'【最終建議】買入/持有/賣出+合理入場價+停損條件+目標價';
 
           callAI(deepPrompt,
@@ -2431,7 +2431,7 @@ function openAddModal() {
       <select class="fs" id="fa">${ACCOUNTS.map(a=>`<option value="${a.id}"${a.id===S.acct?' selected':''}>${a.e} ${a.name}</option>`).join('')}</select>
     </div>
 
-    <!-- 類型選擇（大按鈕） -->
+    <!-- 類型選擇(大按鈕) -->
     <div class="fl"><label>類型</label>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
         <div id="type-stock" onclick="selectType('stock')"
@@ -2483,7 +2483,7 @@ function openAddModal() {
       <div class="fl"><label>名稱</label>
         <input type="text" class="fi" id="fn" placeholder="例：台積電">
       </div>
-      <div class="fl"><label>平均成本（元/股）</label>
+      <div class="fl"><label>平均成本(元/股)</label>
         <input type="number" class="fi" id="fco" placeholder="每股成本">
       </div>
       <div class="fl"><label>持有股數</label>
@@ -2496,13 +2496,13 @@ function openAddModal() {
       <div class="fl"><label>基金名稱</label>
         <input type="text" class="fi" id="fn" placeholder="例：摩根新興市場基金">
       </div>
-      <div class="fl"><label>總投入金額（元）</label>
+      <div class="fl"><label>總投入金額(元)</label>
         <input type="number" class="fi" id="fcost_total" placeholder="例：100000">
       </div>
       <div class="fl"><label>持有單位數</label>
         <input type="number" class="fi" id="funits" placeholder="例：1200.5">
       </div>
-      <div class="fl"><label>目前淨值（NAV）</label>
+      <div class="fl"><label>目前淨值(NAV)</label>
         <input type="number" class="fi" id="fnav" placeholder="例：88.20">
       </div>
     </div>
@@ -2669,9 +2669,9 @@ function openFundAI(code, acct) {
   // 呼叫 Claude API
   const taiex = gP('TAIEX'), sp500 = gP('^GSPC'), sox = gP('^SOX');
   const marketCtx = [
-    taiex ? `台灣加權指數 ${taiex.price?.toLocaleString()} 點（${taiex.changePct>=0?'+':''}${taiex.changePct}%）` : '',
-    sp500 ? `S&P500 ${sp500.price?.toFixed(0)}（${sp500.changePct>=0?'+':''}${sp500.changePct}%）` : '',
-    sox   ? `費城半導體 ${sox.price?.toFixed(0)}（${sox.changePct>=0?'+':''}${sox.changePct}%）` : '',
+    taiex ? `台灣加權指數 ${taiex.price?.toLocaleString()} 點(${taiex.changePct>=0?'+':''}${taiex.changePct}%)` : '',
+    sp500 ? `S&P500 ${sp500.price?.toFixed(0)}(${sp500.changePct>=0?'+':''}${sp500.changePct}%)` : '',
+    sox   ? `費城半導體 ${sox.price?.toFixed(0)}(${sox.changePct>=0?'+':''}${sox.changePct}%)` : '',
   ].filter(Boolean).join('、');
 
   // Gemini AI 基金分析
@@ -2707,7 +2707,7 @@ function openEditModal(code, acct) {
     <div style="font-size:17px;font-weight:700;margin-bottom:4px">編輯持倉</div>
     <div style="font-size:13px;color:var(--text3);margin-bottom:18px">${s.name} · ${s.code}</div>
     <div class="fl">
-      <label>平均成本（元/股）</label>
+      <label>平均成本(元/股)</label>
       <input type="number" class="fi" id="edit-cost" value="${s.cost}" step="0.01">
     </div>
     <div class="fl">
@@ -2801,7 +2801,7 @@ function setAcct(id) {
 renderTabs();
 renderHome();
 
-// 確保 fetch 完成後重渲染當前頁面（解決持倉頁股價空白問題）
+// 確保 fetch 完成後重渲染當前頁面(解決持倉頁股價空白問題)
 async function fetchAndRender() {
   await fetchPrices();
   renderPage(S.page);
@@ -2843,7 +2843,7 @@ async function fetchAndRender() {
     }, msUntil);
     const h = Math.floor(msUntil / 3600000);
     const m = Math.floor((msUntil % 3600000) / 60000);
-    console.log('[新聞] 下次自動更新：' + h + '小時' + m + '分後（早上8:00）');
+    console.log('[新聞] 下次自動更新：' + h + '小時' + m + '分後(早上8:00)');
   }
   scheduleNewsRefresh();
 })();
@@ -2853,7 +2853,7 @@ async function openKlineAnalysis(code, name) {
   document.getElementById('kline-modal')?.remove();
   const el = document.createElement('div');
   el.className = 'overlay'; el.id = 'kline-modal';
-  el.innerHTML = '<div class="sheet" style="max-height:88vh;overflow-y:auto"><div class="handle"></div><div style="font-size:16px;font-weight:700;margin-bottom:2px">📈 K線AI分析</div><div style="font-size:12px;color:var(--text3);margin-bottom:14px">'+name+'（'+code+'）</div><div id="kline-modal-content" style="font-size:13px;line-height:1.9;color:var(--text)"><div style="text-align:center;padding:24px;color:var(--text3)">⏳ 抓取K線資料中...</div></div><button class="btn-o" style="margin-top:16px" onclick="document.getElementById(\'kline-modal\').remove()">關閉</button></div>';
+  el.innerHTML = '<div class="sheet" style="max-height:88vh;overflow-y:auto"><div class="handle"></div><div style="font-size:16px;font-weight:700;margin-bottom:2px">📈 K線AI分析</div><div style="font-size:12px;color:var(--text3);margin-bottom:14px">'+name+'('+code+')</div><div id="kline-modal-content" style="font-size:13px;line-height:1.9;color:var(--text)"><div style="text-align:center;padding:24px;color:var(--text3)">⏳ 抓取K線資料中...</div></div><button class="btn-o" style="margin-top:16px" onclick="document.getElementById(\'kline-modal\').remove()">關閉</button></div>';
   el.addEventListener('click', e => { if(e.target===el) el.remove(); });
   document.body.appendChild(el);
   const contentEl = document.getElementById('kline-modal-content');
@@ -2872,10 +2872,48 @@ async function openKlineAnalysis(code, name) {
     return;
   }
   contentEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text3)">🤖 AI 分析中...</div>';
-  const kStr = name+'('+code+') 60日技術指標\n現價$'+kl.latest+' 今日'+(p?(p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%':'—')+'\n60日趨勢'+(kl.trend60>=0?'+':'')+kl.trend60+'% 高$'+kl.high60+' 低$'+kl.low60+'\nMA5$'+(kl.ma5||'—')+' MA10$'+(kl.ma10||'—')+' MA20$'+(kl.ma20||'—')+' MA60$'+(kl.ma60||'—')+'\n均線排列：'+(kl.maArrangement||'—')+'\n布林通道：'+(kl.bbSignal||'—')+'\nRSI:'+kl.rsi+' → '+(kl.rsiSignal||'—')+'\nKD：'+(kl.kdSignal||'—')+'\nMACD DIF:'+kl.dif+' MACD:'+kl.macdLine+' BAR:'+kl.bar+' → '+(kl.macdSignal||'—')+'\nBIAS/MA20：'+(kl.biasSignal||'—')+'\n量價：量比'+kl.volRatio+'x → '+(kl.volPriceSignal||'—');
-  const prompt = '你是資深技術分析師，精通葛蘭碧八大法則。今天是'+today+'。\n\n'+kStr+'\n\n請分析：\n【1.均線系統（葛蘭碧法則）】排列狀態、現價位置、符合哪條法則\n【2.動能指標】RSI、KD、MACD狀態\n【3.布林通道+乖離率】位置與波動\n【4.量價關係】量能訊號\n【5.K線評分 0~100】給分並說明\n【6.關鍵價位】第一支撐、第二支撐、停損位、翻多價位、目標價\n繁體中文，適合手機閱讀。';
+  const recentLines = (kl.recent||[]).map(c=>{
+    const vTag=c.vr>=150?'放量':c.vr>=120?'量增':c.vr<=60?'量縮':c.vr<=80?'略縮':'正常';
+    const pTag=c.chg>=3?'大漲':c.chg>=1?'漲':c.chg<=-3?'大跌':c.chg<=-1?'跌':'平';
+    return c.date+'|收$'+c.c+'('+(c.chg>=0?'+':'')+c.chg+'%'+pTag+')高$'+c.h+' 低$'+c.l+'|量'+c.v.toLocaleString()+'(比'+c.vr+'%'+vTag+')';
+  }).join('\n');
+  const kStr = name+'('+code+') 技術數據\n'
+    +'今天:'+today+' 現價:$'+kl.latest+' 今日:'+(p?(p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%':'—')+'\n'
+    +'60日區間:高$'+kl.high60+' 低$'+kl.low60+' 趨勢:'+(kl.trend60>=0?'+':'')+kl.trend60+'%\n'
+    +'MA5:$'+(kl.ma5||'—')+' MA10:$'+(kl.ma10||'—')+' MA20:$'+(kl.ma20||'—')+' MA60:$'+(kl.ma60||'—')+'\n'
+    +'均線排列:'+(kl.maArrangement||'—')+'\n'
+    +'RSI(14):'+kl.rsi+' '+(kl.rsiSignal||'—')+'\n'
+    +'KD:'+(kl.kdSignal||'—')+'\n'
+    +'MACD:DIF='+kl.dif+' MACD='+kl.macdLine+' BAR='+kl.bar+' '+(kl.macdSignal||'—')+'\n'
+    +'布林通道:'+(kl.bbSignal||'—')+'\n'
+    +'乖離率/MA20:'+(kl.biasSignal||'—')+'\n'
+    +'近20日逐日K線+成交量:\n'+recentLines;
+  const prompt = '你是擁有30年實戰經驗的台股技術分析師，精通波段操作與量價分析。今天是'+today+'。\n\n'
+    +kStr+'\n\n'
+    +'請依以下架構深度分析，重點在找出「這波趨勢的高點」與「最佳賣出時機」：\n\n'
+    +'【1. 這波趨勢分析】\n'
+    +'- 這波上漲從哪裡起漲？起漲時的量價特徵是什麼？\n'
+    +'- 目前走到第幾波？還在上漲趨勢中，還是已出現頂部訊號？\n'
+    +'- 60日高點在哪裡？與現價差距多少？\n\n'
+    +'【2. 量價背離偵測(最重要)】\n'
+    +'- 逐日分析近20根K線的量價組合(價漲量縮/價漲量增/價跌量增/價跌量縮等9種組合)\n'
+    +'- 是否出現天量、量縮不過高、高點量縮背離等警訊？\n'
+    +'- 成交量是否比起漲時萎縮？主力是否有出貨跡象？\n\n'
+    +'【3. 頭部訊號辨識】\n'
+    +'- RSI、KD、MACD是否與股價出現頂背離？\n'
+    +'- 布林通道是否觸及上軌後收縮？\n'
+    +'- 是否有長上影線、量增不漲等頭部K線形態？\n\n'
+    +'【4. 賣出時機判斷】\n'
+    +'- 現在應該持有、減碼還是出場？請給明確結論\n'
+    +'- 建議賣出的具體條件(跌破哪個價位、出現什麼訊號)\n'
+    +'- 分批賣出建議：第一批賣出條件、第二批賣出條件\n\n'
+    +'【5. 關鍵價位】\n'
+    +'- 波段目標價(若趨勢未轉)\n'
+    +'- 第一賣出點、第二賣出點\n'
+    +'- 停損位、不得不出場的破底價\n\n'
+    +'繁體中文，理由要詳細，引用具體K線日期與量能數據佐證，格式適合手機閱讀。';
   try {
-    const r = await fetch('/api/claude', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,max_tokens:1500}),signal:AbortSignal.timeout(45000)});
+    const r = await fetch('/api/claude', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,max_tokens:2500}),signal:AbortSignal.timeout(60000)});
     const d = await r.json();
     contentEl.innerHTML = d.ok ? '<div style="white-space:pre-wrap">'+d.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>' : '<div style="color:var(--text3)">分析失敗</div>';
   } catch(e) { contentEl.innerHTML = '<div style="color:var(--text3)">請求失敗</div>'; }
@@ -2885,20 +2923,61 @@ async function openCompanyAnalysis(code, name) {
   document.getElementById('company-modal')?.remove();
   const el = document.createElement('div');
   el.className = 'overlay'; el.id = 'company-modal';
-  el.innerHTML = '<div class="sheet" style="max-height:88vh;overflow-y:auto"><div class="handle"></div><div style="font-size:16px;font-weight:700;margin-bottom:2px">🏢 公司深度分析</div><div style="font-size:12px;color:var(--text3);margin-bottom:14px">'+name+'（'+code+'）</div><div id="company-modal-content" style="font-size:13px;line-height:1.9;color:var(--text)"><div style="text-align:center;padding:24px;color:var(--text3)">⏳ AI 深度分析中...</div></div><button class="btn-o" style="margin-top:16px" onclick="document.getElementById(\'company-modal\').remove()">關閉</button></div>';
+  el.innerHTML = '<div class="sheet" style="max-height:88vh;overflow-y:auto"><div class="handle"></div><div style="font-size:16px;font-weight:700;margin-bottom:2px">🏢 公司深度分析</div><div style="font-size:12px;color:var(--text3);margin-bottom:14px">'+name+'('+code+')</div><div id="company-modal-content" style="font-size:13px;line-height:1.9;color:var(--text)"><div style="text-align:center;padding:24px;color:var(--text3)">⏳ 抓取公司資料中...</div></div><button class="btn-o" style="margin-top:16px" onclick="document.getElementById(\'company-modal\').remove()">關閉</button></div>';
   el.addEventListener('click', e => { if(e.target===el) el.remove(); });
   document.body.appendChild(el);
   const contentEl = document.getElementById('company-modal-content');
   const p = typeof gP === 'function' ? gP(code) : null;
   const today = new Date().toLocaleDateString('zh-TW');
-  const priceInfo = p ? '今日股價$'+p.price.toFixed(0)+'（'+(p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%）' : '';
-  const prompt = '扮演資深股票研究分析師。今天是'+today+'。\n'+name+'（'+code+'）'+priceInfo+'\n\n請編寫綜合投資分析報告：\n【1.執行摘要】業務概述、投資論點、買入/持有/賣出、主要催化劑與風險\n【2.財務表現】5年+TTM營收成長、毛利率、淨利率、資產負債表、FCF\n【3.估值分析】本益比/P/S/P/B/EV/EBITDA，對比歷史均值、產業平均、前3競爭對手，結論：高估/低估/合理\n【4.競爭護城河】核心業務、競爭優勢、護城河耐久性\n【5.成長展望】主要催化劑、TAM市場機會\n【6.管理與治理】CEO背景、資本配置、內部人持股\n【7.風險分析】公司特有風險3項、系統性風險3項\n【8.最終建議】買入/持有/賣出+理由+目標價區間\n繁體中文，數據導向，適合手機閱讀。';
+  const priceInfo = p ? '今日股價$'+p.price.toFixed(0)+'('+(p.changePct>=0?'+':'')+p.changePct.toFixed(2)+'%)' : '';
+
+  // 先從 Yahoo Finance 抓公司基本資料
+  let companyInfo = '';
+  try {
+    const isTW = /^[0-9]/.test(code);
+    const symbols = isTW ? [code+'.TW', code+'.TWO'] : [code];
+    for (const sym of symbols) {
+      try {
+        const r = await fetch('/api/company-info?code='+encodeURIComponent(sym), {signal: AbortSignal.timeout(8000)});
+        if (!r.ok) continue;
+        const d = await r.json();
+        if (d.ok && d.info) {
+          const i = d.info;
+          companyInfo = '\n【公司基本資料（來自Yahoo Finance，請以此為準）】\n'
+            +(i.longName    ? '公司全名：'+i.longName+'\n'   : '')
+            +(i.industry    ? '產業：'+i.industry+'\n'       : '')
+            +(i.sector      ? '板塊：'+i.sector+'\n'         : '')
+            +(i.marketCap   ? '市值：'+i.marketCap+'\n'      : '')
+            +(i.employees   ? '員工數：'+i.employees+'\n'    : '')
+            +(i.description ? '業務描述：'+i.description+'\n': '');
+          break;
+        }
+      } catch(e) {}
+    }
+  } catch(e) {}
+
+  contentEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text3)">🤖 AI 深度分析中...</div>';
+  const prompt = '你是資深股票研究分析師，保守、理性、數據導向。今天是'+today+'。\n'
+    +'分析標的：'+name+'('+code+') '+priceInfo
+    +companyInfo+'\n\n'
+    +'重要指示：請嚴格依照上方「公司基本資料」的業務描述來分析，不要自行猜測或替換成其他公司的業務。'
+    +'如果沒有基本資料，請明確說明「無法取得公司資料，以下分析僅供參考」。\n\n'
+    +'請依以下架構分析：\n'
+    +'【1.執行摘要】實際業務概述、投資論點、買入/持有/賣出、主要催化劑與風險\n'
+    +'【2.財務表現】近年營收成長趨勢、毛利率、EPS、現金流狀況\n'
+    +'【3.估值分析】本益比/P/S/P/B，對比歷史均值與同業，高估/低估/合理\n'
+    +'【4.競爭護城河】核心業務、競爭優勢來源、護城河耐久性\n'
+    +'【5.成長展望】主要催化劑、市場機會\n'
+    +'【6.風險分析】公司特有風險3項、系統性風險3項\n'
+    +'【7.最終建議】買入/持有/賣出+理由+目標價區間+停損條件\n'
+    +'繁體中文，數據導向，適合手機閱讀。';
   try {
     const r = await fetch('/api/claude', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,max_tokens:2000}),signal:AbortSignal.timeout(60000)});
     const d = await r.json();
     contentEl.innerHTML = d.ok ? '<div style="white-space:pre-wrap">'+d.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>' : '<div style="color:var(--text3)">分析失敗</div>';
   } catch(e) { contentEl.innerHTML = '<div style="color:var(--text3)">請求失敗</div>'; }
 }
+
 </script>  
 </body>
 </html>
