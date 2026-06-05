@@ -1,60 +1,61 @@
-// api/sector.js — 富果 Fugle 即時產業漲跌幅
+// api/sector.js — 用 Fugle snapshot/quotes 計算各產業漲跌
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Cache-Control', 's-maxage=60');
 
   const FUGLE_KEY = process.env.FUGLE_TOKEN || 'ca453271-e70a-4b5a-8631-95cec32fb39a';
   const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36';
 
-  // 依序嘗試 Fugle 可能正確的路徑
-  const FUGLE_URLS = [
-    'https://api.fugle.tw/marketdata/v1.0/stock/snapshot/industries/TSE',
-    'https://api.fugle.tw/marketdata/v1.0/stock/snapshot/industries/TWSE',
-    'https://api.fugle.tw/marketdata/v1.0/stock/snapshot/industries',
-    'https://api.fugle.tw/marketdata/v1.0/stock/intraday/industries/TSE',
-    'https://api.fugle.tw/marketdata/v1.0/stock/intraday/industries',
-  ];
+  // 代號→產業對照（上市主要股票）
+  const CODE_GROUP = {"1101":"水泥","1102":"水泥","1103":"水泥","1104":"水泥","1108":"水泥","1109":"水泥","1110":"水泥","1201":"食品","1203":"食品","1210":"食品","1213":"食品","1215":"食品","1216":"食品","1217":"食品","1218":"食品","1219":"食品","1220":"食品","1225":"食品","1227":"食品","1229":"食品","1231":"食品","1232":"食品","1301":"塑膠","1303":"塑膠","1304":"塑膠","1305":"塑膠","1308":"塑膠","1309":"塑膠","1310":"塑膠","1312":"塑膠","1313":"塑膠","1314":"塑膠","1315":"塑膠","1316":"塑膠","1317":"塑膠","1318":"塑膠","1319":"塑膠","1321":"塑膠","1323":"塑膠","1324":"塑膠","1325":"塑膠","1326":"塑膠","1402":"紡織","1404":"紡織","1414":"紡織","1434":"紡織","1436":"紡織","1440":"紡織","1441":"紡織","1446":"紡織","1452":"紡織","1454":"紡織","1460":"紡織","1463":"紡織","1464":"紡織","1465":"紡織","1466":"紡織","1476":"紡織","1477":"紡織","1503":"電機","1504":"電機","1513":"電機","1515":"電機","1519":"電機","1521":"電機","1524":"電機","1525":"電機","1526":"電機","1527":"電機","1528":"電機","1529":"電機","1530":"電機","1532":"電機","1533":"電機","1535":"電機","1536":"電機","1537":"電機","1538":"電機","1540":"電機","1590":"電機","1597":"電機","1605":"電纜","1609":"電纜","1702":"化學","1710":"化學","1711":"化學","1712":"化學","1714":"化學","1717":"化學","1718":"化學","1720":"化學","1722":"化學","1723":"化學","1724":"化學","1725":"化學","1726":"化學","1727":"化學","1730":"化學","1731":"化學","1786":"生技","1902":"造紙","1904":"造紙","1905":"造紙","1907":"造紙","1909":"造紙","1910":"造紙","2002":"鋼鐵","2006":"鋼鐵","2007":"鋼鐵","2008":"鋼鐵","2010":"鋼鐵","2012":"鋼鐵","2013":"鋼鐵","2014":"鋼鐵","2015":"鋼鐵","2023":"鋼鐵","2027":"鋼鐵","2028":"鋼鐵","2029":"鋼鐵","2032":"鋼鐵","2038":"鋼鐵","2049":"電機","2059":"電機","2101":"橡膠","2102":"橡膠","2103":"橡膠","2104":"橡膠","2105":"橡膠","2106":"橡膠","2107":"橡膠","2108":"橡膠","2109":"橡膠","2110":"橡膠","2111":"橡膠","2112":"橡膠","2201":"汽車","2204":"汽車","2207":"汽車","2209":"汽車","2211":"汽車","2227":"汽車","2301":"電子零組件","2302":"半導體","2303":"半導體","2308":"電子零組件","2313":"電子零組件","2317":"電子零組件","2324":"電腦週邊","2327":"半導體","2329":"半導體","2330":"半導體","2337":"半導體","2338":"電子零組件","2340":"電子零組件","2344":"半導體","2345":"通信網路","2347":"通信網路","2348":"通信網路","2351":"半導體","2352":"電腦週邊","2353":"電腦週邊","2356":"電腦週邊","2357":"電腦週邊","2360":"電子零組件","2362":"電腦週邊","2363":"電子零組件","2365":"電腦週邊","2367":"電子零組件","2368":"電子零組件","2374":"電腦週邊","2376":"電腦週邊","2377":"電腦週邊","2379":"半導體","2382":"電腦週邊","2383":"電子零組件","2385":"半導體","2387":"電腦週邊","2392":"電子零組件","2393":"光電","2395":"電腦週邊","2399":"電腦週邊","2401":"光電","2402":"光電","2403":"光電","2404":"光電","2405":"光電","2406":"光電","2408":"半導體","2409":"光電","2412":"通信網路","2449":"半導體","2450":"半導體","2454":"半導體","2456":"電子零組件","2458":"電子零組件","2464":"電子零組件","2465":"電子零組件","2492":"電子零組件","2501":"建材","2511":"建材","2520":"建材","2524":"建材","2530":"建材","2534":"建材","2535":"建材","2536":"建材","2537":"建材","2538":"建材","2539":"建材","2540":"建材","2542":"建材","2543":"建材","2545":"建材","2547":"建材","2548":"建材","2601":"航運","2603":"航運","2605":"航運","2606":"航運","2607":"航運","2608":"航運","2609":"航運","2610":"航運","2611":"航運","2612":"航運","2613":"航運","2615":"航運","2616":"航運","2617":"航運","2618":"航運","2701":"觀光","2702":"觀光","2704":"觀光","2712":"觀光","2717":"觀光","2718":"觀光","2722":"觀光","2727":"觀光","2729":"觀光","2801":"金融","2812":"金融","2823":"金融","2832":"金融","2834":"金融","2836":"金融","2838":"金融","2880":"金融","2881":"金融","2882":"金融","2883":"金融","2884":"金融","2885":"金融","2886":"金融","2887":"金融","2888":"金融","2889":"金融","2890":"金融","2891":"金融","2892":"金融","2903":"貿易","2912":"貿易","2915":"貿易","3008":"光電","3014":"光電","3017":"其他電子","3019":"其他電子","3023":"其他電子","3024":"其他電子","3026":"其他電子","3030":"其他電子","3034":"半導體","3035":"半導體","3036":"其他電子","3037":"電子零組件","3042":"電子零組件","3044":"其他電子","3048":"其他電子","3049":"光電","3051":"其他電子","3054":"其他電子","3057":"其他電子","3061":"光電","3062":"其他電子","3066":"其他電子","3088":"其他電子","3092":"其他電子","3094":"其他電子","3095":"其他電子","3097":"其他電子","3105":"半導體","3130":"半導體","3380":"通信網路","3406":"光電","3443":"半導體","3529":"半導體","3533":"半導體","3661":"半導體","3673":"光電","3703":"電腦週邊","3711":"半導體","4104":"生技","4108":"生技","4126":"生技","4128":"生技","4130":"生技","4137":"生技","4142":"生技","4144":"生技","4148":"生技","4174":"生技","4726":"生技","4904":"通信網路","4999":"通信網路","5347":"半導體","5483":"半導體","5871":"金融","5876":"金融","5880":"金融","6005":"金融","6176":"光電","6206":"其他電子","6214":"其他電子","6215":"光電","6239":"半導體","6488":"半導體","6446":"生技","6533":"半導體","6669":"電腦週邊","6770":"半導體","9907":"油電","9908":"油電","9911":"油電","9914":"油電"};
 
-  for (const url of FUGLE_URLS) {
-    try {
-      const r = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${FUGLE_KEY}`,
-          'User-Agent': UA,
-          'Accept': 'application/json',
-        },
-        signal: AbortSignal.timeout(6000)
-      });
+  // ── Fugle snapshot/quotes 抓全市場個股漲跌 ──────────────────
+  try {
+    const r = await fetch('https://api.fugle.tw/marketdata/v1.0/stock/snapshot/quotes/TSE', {
+      headers: {
+        'X-API-KEY': FUGLE_KEY,
+        'User-Agent': UA,
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(10000)
+    });
 
-      const raw = await r.text();
-      console.log(`[sector] ${url.split('/').slice(-2).join('/')} → status:${r.status} body:${raw.slice(0,200)}`);
+    const raw = await r.text();
+    console.log('[sector] fugle quotes status:', r.status, raw.slice(0, 300));
 
-      if (r.ok) {
-        const data = JSON.parse(raw);
-        const list = Array.isArray(data) ? data
-          : Array.isArray(data?.data) ? data.data
-          : Array.isArray(data?.industries) ? data.industries
-          : Array.isArray(data?.items) ? data.items
-          : [];
+    if (r.ok) {
+      const data = JSON.parse(raw);
+      const list = Array.isArray(data?.data) ? data.data
+        : Array.isArray(data) ? data : [];
 
-        if (list.length >= 3) {
-          const sectors = list.map(item => {
-            const name = (item.industry || item.industryName || item.name || item.Industry || '').trim();
-            const pct  = parseFloat(
-              item.changePercent ?? item.change_percent ?? item.changeRatio ??
-              item.priceChange?.changePercent ?? item.changeRate ?? item.pctChg ?? 0
-            );
-            return { name, pct: +pct.toFixed(2) };
-          }).filter(s => s.name).sort((a, b) => b.pct - a.pct);
+      console.log('[sector] list len:', list.length, 'sample:', JSON.stringify(list[0])?.slice(0,150));
 
-          if (sectors.length >= 3) {
-            return res.status(200).json({ ok: true, sectors, source: url.split('/').slice(-2).join('/') });
-          }
+      if (list.length >= 10) {
+        // 按產業分組計算平均漲跌幅
+        const groups = {};
+        list.forEach(stock => {
+          const code = stock.symbol || stock.code || '';
+          const group = CODE_GROUP[code];
+          if (!group) return;
+          const pct = parseFloat(stock.changePercent ?? stock.change_percent ?? stock.changeRatio ?? 0);
+          if (isNaN(pct)) return;
+          if (!groups[group]) groups[group] = { sum: 0, count: 0 };
+          groups[group].sum += pct;
+          groups[group].count++;
+        });
+
+        const sectors = Object.entries(groups)
+          .filter(([, g]) => g.count >= 2)
+          .map(([name, g]) => ({ name, pct: +(g.sum / g.count).toFixed(2) }))
+          .sort((a, b) => b.pct - a.pct);
+
+        if (sectors.length >= 5) {
+          return res.status(200).json({ ok: true, sectors, source: 'fugle_quotes' });
         }
       }
-    } catch(e) {
-      console.log(`[sector] ${url.split('/').slice(-1)[0]} error:`, e.message);
     }
+  } catch(e) {
+    console.log('[sector] fugle error:', e.message);
   }
 
   // ── TWSE MI_INDEX20 備用 ──────────────────────────────────────
@@ -65,20 +66,16 @@ export default async function handler(req, res) {
     });
     if (r.ok) {
       const data = await r.json();
-      if (Array.isArray(data) && data.length > 0) {
-        const sectors = data
-          .filter(item => item.Index && !['加權股價指數','未含金融保險股指數','未含電子股指數'].includes(item.Index))
-          .map(item => {
-            const pct = parseFloat((item.ChangePercent||'0').replace(/[+%,]/g,''));
-            const dir = (item.Direction||'+') === '-' ? -1 : 1;
-            return { name: item.Index, pct: +(dir * pct).toFixed(2) };
-          })
-          .sort((a, b) => b.pct - a.pct);
-        if (sectors.length >= 5)
-          return res.status(200).json({ ok: true, sectors, source: 'twse_mi_index20' });
-      }
+      const sectors = data
+        .filter(i => i.Index && !['加權股價指數','未含金融保險股指數','未含電子股指數'].includes(i.Index))
+        .map(i => {
+          const pct = parseFloat((i.ChangePercent||'0').replace(/[+%,]/g,''));
+          return { name: i.Index, pct: +((i.Direction==='-'?-1:1)*pct).toFixed(2) };
+        }).sort((a,b) => b.pct - a.pct);
+      if (sectors.length >= 5)
+        return res.status(200).json({ ok: true, sectors, source: 'twse' });
     }
   } catch(e) {}
 
-  return res.status(200).json({ ok: false, error: 'all sources failed' });
+  return res.status(200).json({ ok: false });
 }
