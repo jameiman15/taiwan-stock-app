@@ -676,14 +676,14 @@ function renderHome() {
               </div>
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
-            <div style="background:rgba(255,255,255,.1);border-radius:8px;padding:8px 10px">
-              <div style="font-size:9px;color:rgba(255,255,255,.6);margin-bottom:4px;font-weight:600">🚀 最強族群</div>
-              <div id="top-sectors" style="font-size:11px;font-weight:600;line-height:1.7">⏳ 分析中...</div>
+          <div style="margin-bottom:8px">
+            <div style="background:rgba(255,255,255,.1);border-radius:8px;padding:8px 10px;margin-bottom:6px">
+              <div style="font-size:9px;color:rgba(255,255,255,.6);margin-bottom:6px;font-weight:600">🚀 最強產業(點擊展開個股)</div>
+              <div id="top-sectors" style="font-size:11px;font-weight:600;line-height:1.8">⏳ 抓取中...</div>
             </div>
             <div style="background:rgba(255,255,255,.1);border-radius:8px;padding:8px 10px">
-              <div style="font-size:9px;color:rgba(255,255,255,.6);margin-bottom:4px;font-weight:600">⚠️ 最弱族群</div>
-              <div id="weak-sectors" style="font-size:11px;font-weight:600;line-height:1.7">⏳ 分析中...</div>
+              <div style="font-size:9px;color:rgba(255,255,255,.6);margin-bottom:6px;font-weight:600">⚠️ 最弱產業(點擊展開個股)</div>
+              <div id="weak-sectors" style="font-size:11px;font-weight:600;line-height:1.8">⏳ 抓取中...</div>
             </div>
           </div>
           <div style="background:rgba(255,255,255,.1);border-radius:8px;padding:8px 10px">
@@ -811,32 +811,110 @@ function renderHome() {
       else                   { lgEl.style.background='#ef4444'; bgEl.textContent='🔴 偏空'; }
     }
 
-    // AI 生成族群 + 策略
+    // ── 抓 TWSE 產業漲跌幅 ──────────────────────────────────────
     var mktData = 'S&P500:'+(spPct>=0?'+':'')+spPct.toFixed(2)+'% 費半:'+(soxPct>=0?'+':'')+soxPct.toFixed(2)+'% 台積電ADR:'+(tsmPct>=0?'+':'')+tsmPct.toFixed(2)+'% 加權:'+(taiex?(taiex.changePct>=0?'+':'')+taiex.changePct.toFixed(2)+'%':'—');
-    var sigPrompt = getPrompt('signal').replace('{date}', tomorrowStr).replace('{mktData}', mktData);
 
-    callAI(sigPrompt, function(text) {
+    // 從 TWSE 抓即時產業熱力資料
+    (async function() {
+      var topEl = document.getElementById('top-sectors');
+      var wkEl  = document.getElementById('weak-sectors');
+      var stEl  = document.getElementById('today-strategy');
+
       try {
-        // 更強的 JSON 清理：只取第一個 { ... } 區塊
-        var jsonStr = text.replace(/```json|```/g,'').trim();
-        var jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) throw new Error('no json');
-        var d = JSON.parse(jsonMatch[0]);
-        var topEl = document.getElementById('top-sectors');
-        var wkEl  = document.getElementById('weak-sectors');
-        var stEl  = document.getElementById('today-strategy');
-        if (topEl && d.top)      topEl.innerHTML  = d.top.map((t,i)=>'<div>'+['①','②','③'][i]+' '+t+'</div>').join('');
-        if (wkEl  && d.weak)     wkEl.innerHTML   = d.weak.map((t,i)=>'<div>'+['①','②'][i]+' '+t+'</div>').join('');
-        if (stEl  && d.strategy) stEl.innerHTML   = d.strategy.map(t=>'<div>✓ '+t+'</div>').join('');
+        // 抓大盤各類指數(含產業別漲跌)
+        var r = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX20', {
+          signal: AbortSignal.timeout(8000)
+        });
+        var sectorData = [];
+
+        if (r.ok) {
+          var data = await r.json();
+          // 每筆：{ Index: '電機機械', Change: '0.50', Direction: '+' }
+          data.forEach(function(item) {
+            var name = item.Index || item.指數名稱 || '';
+            var chg  = parseFloat((item.Change || item.漲跌點數 || '0').replace(/,/g,''));
+            var dir  = (item.Direction || item.漲跌 || '+');
+            var pct  = parseFloat((item.ChangePercent || item.漲跌百分比 || '0').replace(/[+\-%]/g,''));
+            if (!name || name === '加權股價指數' || name === '未含金融保險股指數') return;
+            sectorData.push({
+              name: name,
+              pct:  dir === '-' ? -pct : pct,
+              chg:  dir === '-' ? -chg : chg
+            });
+          });
+        }
+
+        // 若 MI_INDEX20 失敗，嘗試 twse sector API
+        if (!sectorData.length) {
+          var r2 = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d', {
+            signal: AbortSignal.timeout(6000)
+          });
+          // fallback：用 AI 分析
+        }
+
+        if (sectorData.length >= 3) {
+          // 排序：強→弱
+          sectorData.sort(function(a,b){ return b.pct - a.pct; });
+          var top10  = sectorData.slice(0, 10);
+          var weak10 = sectorData.slice(-10).reverse();
+
+          var nums = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+
+          function makeSectorRow(item, idx, isTop) {
+            var color  = isTop ? '#86efac' : '#fca5a5';
+            var pctStr = (item.pct >= 0 ? '+' : '') + item.pct.toFixed(2) + '%';
+            var sid    = 'sector-stocks-' + (isTop?'t':'w') + idx;
+            return '<div style="margin-bottom:4px">'
+              + '<div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:2px 0" onclick="toggleSectorStocks(\'' + sid + '\')">'
+              + '<span>' + nums[idx] + ' ' + item.name + '</span>'
+              + '<span style="color:' + color + ';font-family:monospace;font-size:10px">' + pctStr + ' ▾</span>'
+              + '</div>'
+              + '<div id="' + sid + '" class="sector-detail" style="display:none;padding:4px 0 4px 12px;font-size:10px;opacity:.8" data-sector="' + item.name + '">載入中...</div>'
+              + '</div>';
+          }
+
+          if (topEl) topEl.innerHTML = top10.map(function(t,i){ return makeSectorRow(t,i,true); }).join('');
+          if (wkEl)  wkEl.innerHTML  = weak10.map(function(t,i){ return makeSectorRow(t,i,false); }).join('');
+
+          // AI 只負責策略
+          var sectorSummary = '今日強勢產業：'+top10.slice(0,5).map(function(t){return t.name+'('+(t.pct>=0?'+':'')+t.pct.toFixed(2)+'%)';}).join('、')
+            +'；弱勢產業：'+weak10.slice(0,3).map(function(t){return t.name+'('+(t.pct>=0?'+':'')+t.pct.toFixed(2)+'%)';}).join('、');
+          var sigPrompt = getPrompt('signal').replace('{date}', tomorrowStr).replace('{mktData}', mktData + ' ' + sectorSummary);
+          callAI(sigPrompt, function(text) {
+            try {
+              var jsonStr = text.replace(/```json|```/g,'').trim();
+              var jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+              var d = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+              if (stEl && d && d.strategy) stEl.innerHTML = d.strategy.map(function(t){return '<div>✓ '+t+'</div>';}).join('');
+            } catch(e) {
+              if (stEl) stEl.innerHTML = '<span style="opacity:.6">⚠️ 策略分析失敗</span>';
+            }
+          });
+
+        } else {
+          // TWSE 抓不到，回退 AI 完整分析
+          var sigPrompt2 = getPrompt('signal').replace('{date}', tomorrowStr).replace('{mktData}', mktData);
+          callAI(sigPrompt2, function(text) {
+            try {
+              var jsonStr = text.replace(/```json|```/g,'').trim();
+              var jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+              if (!jsonMatch) throw new Error('no json');
+              var d = JSON.parse(jsonMatch[0]);
+              if (topEl && d.top)      topEl.innerHTML  = d.top.map(function(t,i){return '<div>'+(['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'][i]||'·')+' '+t+'</div>';}).join('');
+              if (wkEl  && d.weak)     wkEl.innerHTML   = d.weak.map(function(t,i){return '<div>'+(['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩'][i]||'·')+' '+t+'</div>';}).join('');
+              if (stEl  && d.strategy) stEl.innerHTML   = d.strategy.map(function(t){return '<div>✓ '+t+'</div>';}).join('');
+            } catch(e) {
+              if (stEl)  stEl.innerHTML  = '<span style="opacity:.6">⚠️ 分析失敗，請重新整理</span>';
+              if (topEl) topEl.innerHTML = '<span style="opacity:.6">—</span>';
+              if (wkEl)  wkEl.innerHTML  = '<span style="opacity:.6">—</span>';
+            }
+          });
+        }
       } catch(e) {
-        var stEl2  = document.getElementById('today-strategy');
-        var topEl2 = document.getElementById('top-sectors');
-        var wkEl2  = document.getElementById('weak-sectors');
-        if (stEl2)  stEl2.innerHTML  = '<span style="opacity:.6">⚠️ 分析失敗，請重新整理</span>';
-        if (topEl2) topEl2.innerHTML = '<span style="opacity:.6">—</span>';
-        if (wkEl2)  wkEl2.innerHTML  = '<span style="opacity:.6">—</span>';
+        if (topEl) topEl.innerHTML = '<span style="opacity:.6">⚠️ 載入失敗</span>';
+        if (wkEl)  wkEl.innerHTML  = '<span style="opacity:.6">—</span>';
       }
-    });
+    })();
   }, 500);
 
   // ── 市場溫度計 AI 分析 ──────────────────────────────────────
@@ -1347,7 +1425,7 @@ function renderAI() {
       .filter(function(kv){ return kv[1] && kv[1].price && kv[0].match(/^\d{4,6}$/); })
       .map(function(kv){ return kv[0]+'=$'+kv[1].price.toFixed(0); })
       .slice(0,30).join(' ');
-    // 建立代號→公司業務說明對照表（提供給 AI 作為基本面依據）
+    // 建立代號→公司業務說明對照表(提供給 AI 作為基本面依據)
     var bizDesc = {
       '2330':'台積電－全球最大晶圓代工，CoWoS先進封裝，AI晶片主要製造商',
       '2454':'聯發科－IC設計龍頭，天璣手機晶片+Wi-Fi/藍牙，車用與AIoT',
@@ -1395,13 +1473,13 @@ function renderAI() {
       +'S&P500：'+(_s5?(_s5.changePct>=0?'+':'')+_s5.changePct?.toFixed(2)+'%':'—')+'\n'
       +'台積電：'+(_tmc?'$'+_tmc.price?.toFixed(0)+'('+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%)':'—')+'\n'
       +(knownPrices?'已知個股現價(請以此為準)：'+knownPrices+'\n':'')+'\n'
-      +'【台股公司業務對照表（basis基本面必須依此，禁止自行猜測）】\n'
+      +'【台股公司業務對照表(basis基本面必須依此，禁止自行猜測)】\n'
       +codeDescLines+'\n\n'
       +'⚠️ basis欄位基本面必須符合上表真實業務，禁止張冠李戴！\n'
       +'例如：國泰金(2882)是金融業，新唐(4919)是MCU微控制器IC，飛捷(6206)是POS系統。\n\n'
-      +'請選出10支台股標的（涵蓋多種產業）：\n'
+      +'請選出10支台股標的(涵蓋多種產業)：\n'
       +'只回純JSON，10個物件，不要markdown：\n'
-      +'[{"g":1或2,"code":"代碼","name":"正確公司名","entry":數字,"stop":數字,"target":數字,"score":數字,"basis":"基本面：（真實業務描述）。技術面：...。籌碼面：...。市場面：...。"}]\n\n'
+      +'[{"g":1或2,"code":"代碼","name":"正確公司名","entry":數字,"stop":數字,"target":數字,"score":數字,"basis":"基本面：(真實業務描述)。技術面：...。籌碼面：...。市場面：...。"}]\n\n'
       +'g=1(可進場5支)：entry<=現價，技術啟動，籌碼偏多\n'
       +'g=2(等待5支)：基本面佳但現價偏高，等回測\n'
       +'entry：現價±15%以內，stop：entry的88-95%，target：entry的115-130%\n'
@@ -1536,7 +1614,7 @@ function renderAI() {
             .then(function(json){
               if (json.data) {
                 Object.assign(S.prices, json.data);
-                // 重新渲染選股卡片（現價補齊）
+                // 重新渲染選股卡片(現價補齊)
                 var izEl2=document.getElementById('recs-in-zone');
                 var wzEl2=document.getElementById('recs-wait-zone');
                 if(izEl2){ izEl2.innerHTML=''; inZone.forEach(function(r){izEl2.appendChild(makeCard(r));}); }
@@ -1774,23 +1852,23 @@ S&P500：{sp500}
 【選股核心邏輯】
 ────────────────────
 
-一、技術趨勢（40分）
+一、技術趨勢(40分)
 優先選擇：股價站上均線多頭排列、MACD零軸以上或黃金交叉、RSI介於50~75、近期突破整理區
 避免：已連續大漲超過30%、爆量長黑、跌破季線、均線空頭排列
 
-二、基本面（25分）
+二、基本面(25分)
 優先選擇：最近4季EPS持續成長、ROE>10%、最近3個月營收年增率正向
 優先產業：AI伺服器、ASIC、CoWoS、半導體設備、散熱、高速傳輸、網通、機器人、先進封裝
 
-三、籌碼面（10分）
+三、籌碼面(10分)
 外資+投信近20日偏買超、融資未異常增加、主力籌碼集中度提升
 
-四、市場環境（15分）
+四、市場環境(15分)
 評估美國科技股趨勢、費半趨勢、台積電股價方向、台股大盤位置
 
-五、進場位置（10分）
-g=1（可進場）：突破整理區後拉回20MA支撐，entry<=現價，rr=(target-entry)/(entry-stop)>=3
-g=2（等待）：基本面佳但現價偏高超過5%，等待回測支撐
+五、進場位置(10分)
+g=1(可進場)：突破整理區後拉回20MA支撐，entry<=現價，rr=(target-entry)/(entry-stop)>=3
+g=2(等待)：基本面佳但現價偏高超過5%，等待回測支撐
 
 ────────────────────
 【排除條件】
@@ -1808,7 +1886,7 @@ g=2（等待）：基本面佳但現價偏高超過5%，等待回測支撐
 規則：
 1. code必須是真實台股代碼，name必須與code完全對應，不可重複
 2. score為1-100整數，不可全部相同
-3. 至少5檔g=1（entry<=現價，rr>=3），至少5檔g=2
+3. 至少5檔g=1(entry<=現價，rr>=3)，至少5檔g=2
 4. 排除ETF、ETN、權證、興櫃
 5. 只輸出JSON陣列，不得有任何其他文字`,
 
@@ -2036,6 +2114,68 @@ function savePromptFromEditor(key) {
   }
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 3000);
+}
+
+// ── 產業個股展開 ─────────────────────────────────────────────
+function toggleSectorStocks(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  if (el.style.display === 'block') { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  if (el.dataset.loaded) return;
+  el.dataset.loaded = '1';
+  var sector = el.dataset.sector;
+  if (!sector) return;
+
+  // 從 TWSE 抓該產業個股
+  fetch('https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX20_ALLBUT0999', {
+    signal: AbortSignal.timeout(8000)
+  })
+  .then(function(r){ return r.ok ? r.json() : null; })
+  .then(function(data) {
+    if (!data) { el.textContent = '無法載入個股資料'; return; }
+    // 過濾該產業股票
+    var stocks = data.filter(function(s){
+      return (s.Industry || s.產業別 || '') === sector && s.Code && s.Name;
+    });
+    // 若 API 無產業欄位，改用全量資料從 S.prices 比對
+    if (!stocks.length) {
+      // 用已知現價資料列出前10大漲/跌
+      var priceList = Object.entries(S.prices || {})
+        .filter(function(kv){ return kv[1] && kv[1].price && /^\d{4}$/.test(kv[0]); })
+        .map(function(kv){
+          var db = STOCK_DB.find(function(s){return s.code===kv[0];});
+          return {code:kv[0], name:db?db.name:kv[1].name||kv[0], pct:kv[1].changePct||0};
+        })
+        .sort(function(a,b){return b.pct-a.pct;})
+        .slice(0,10);
+      el.innerHTML = priceList.length
+        ? priceList.map(function(s,i){
+            return '<div style="display:flex;justify-content:space-between">'
+              +'<span>'+(i+1)+'. '+s.name+' '+s.code+'</span>'
+              +'<span style="color:'+(s.pct>=0?'#86efac':'#fca5a5')+';font-family:monospace">'+(s.pct>=0?'+':'')+s.pct.toFixed(2)+'%</span>'
+              +'</div>';
+          }).join('')
+        : '暫無個股資料';
+      return;
+    }
+    // 排序取前10
+    stocks.sort(function(a,b){
+      var pa = parseFloat((a.ChangePercent||'0').replace(/[+%]/g,''));
+      var pb = parseFloat((b.ChangePercent||'0').replace(/[+%]/g,''));
+      return pb - pa;
+    });
+    el.innerHTML = stocks.slice(0,10).map(function(s,i){
+      var pct = parseFloat((s.ChangePercent||'0').replace(/[+%]/g,''));
+      var dir = (s.Direction||'+') === '-' ? -1 : 1;
+      pct = dir * pct;
+      return '<div style="display:flex;justify-content:space-between">'
+        +'<span>'+(i+1)+'. '+s.Name+' <span style="opacity:.6">'+s.Code+'</span></span>'
+        +'<span style="color:'+(pct>=0?'#86efac':'#fca5a5')+';font-family:monospace">'+(pct>=0?'+':'')+pct.toFixed(2)+'%</span>'
+        +'</div>';
+    }).join('');
+  })
+  .catch(function(){ el.textContent = '載入失敗'; });
 }
 
 function resetPromptConfirm(key) {
@@ -3030,13 +3170,13 @@ function setAcct(id) {
   S.acct = id; renderTabs(); renderPage(S.page);
 }
 
-// ─── 動態載入完整股票清單（TWSE + TPEx OpenAPI，從瀏覽器直接呼叫）───────
+// ─── 動態載入完整股票清單(TWSE + TPEx OpenAPI，從瀏覽器直接呼叫)───────
 async function loadFullStockDB() {
   // 建立現有 STOCK_DB 的 code set，避免重複
   const existing = new Set(STOCK_DB.map(s => s.code));
 
   try {
-    // 同時抓上市（TWSE）和上櫃（TPEx）
+    // 同時抓上市(TWSE)和上櫃(TPEx)
     const [twseRes, tpexRes] = await Promise.allSettled([
       fetch('https://openapi.twse.com.tw/v1/opendata/t187ap03_L', {
         headers: { 'Accept': 'application/json' },
@@ -3119,7 +3259,7 @@ async function fetchAndRender() {
   await fetchAndRender();
   setInterval(fetchAndRender, 60000);
 
-  // 背景載入完整股票清單（不阻塞主流程）
+  // 背景載入完整股票清單(不阻塞主流程)
   loadFullStockDB();
 
   // ── 每天早上 8:00 自動刷新新聞 ──────────────────────────────────
@@ -3241,7 +3381,7 @@ async function openCompanyAnalysis(code, name) {
         const d = await r.json();
         if (d.ok && d.info) {
           const i = d.info;
-          companyInfo = '\n【公司基本資料（來自Yahoo Finance，請以此為準）】\n'
+          companyInfo = '\n【公司基本資料(來自Yahoo Finance，請以此為準)】\n'
             +(i.longName    ? '公司全名：'+i.longName+'\n'   : '')
             +(i.industry    ? '產業：'+i.industry+'\n'       : '')
             +(i.sector      ? '板塊：'+i.sector+'\n'         : '')
@@ -3288,6 +3428,6 @@ async function openCompanyAnalysis(code, name) {
       .replace('{sox}',        soxStr)
       .replace('{sp500}',      sp5Str)
       .replace('{tsmc}',       tmcStr)
-      .replace('{knownPrices}',knownPrices || '（無即時個股資料）');
+      .replace('{knownPrices}',knownPrices || '(無即時個股資料)');
 
 
