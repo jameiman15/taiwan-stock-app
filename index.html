@@ -1409,8 +1409,15 @@ function renderAI() {
     callAI(rPrompt, function(text) {
       try {
         var clean = text.replace(/```json|```/g,'').trim();
-        var recs = JSON.parse(clean);
-        if (!Array.isArray(recs)) throw new Error('not array');
+        var parsed = JSON.parse(clean);
+        // 處理 INSUFFICIENT_DATA 回應
+        if (!Array.isArray(parsed) && parsed.status === 'INSUFFICIENT_DATA') {
+          var loadingEl2 = document.getElementById('ai-recs-loading');
+          if (loadingEl2) loadingEl2.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">⚠️ AI 表示市場資料不足，請稍後再試或重新整理</div>';
+          return;
+        }
+        var recs = Array.isArray(parsed) ? parsed : [];
+        if (!recs.length) throw new Error('empty array');
 
         // 過濾掉重複代碼
         var seenCodes = {};
@@ -1484,8 +1491,18 @@ function renderAI() {
             +'<div style="font-size:26px;font-weight:700;font-family:monospace;color:'+sc+'">'+r.score+'</div>'
             +'<div style="font-size:10px;color:var(--text3)">評分</div>'
             +'</div></div>'
-            +(r.basis ? '<div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.7;border-top:1px solid var(--border);padding-top:6px">'+r.basis+'</div>' : '')
-            +(r.r && !r.basis ? '<div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.6">'+r.r+'</div>' : '')
+            +(function(){
+              // 支援新版欄位 (trend/tech/fundamental/chip/risk) 和舊版 basis
+              var lines = [];
+              if (r.trend)       lines.push('趨勢：'+r.trend);
+              if (r.tech)        lines.push('技術：'+r.tech);
+              if (r.fundamental) lines.push('基本面：'+r.fundamental);
+              if (r.chip)        lines.push('籌碼：'+r.chip);
+              if (r.risk)        lines.push('風險：'+r.risk);
+              if (r.rr)          lines.push('風報比：'+r.rr);
+              var basisText = lines.length ? lines.join('　') : (r.basis || r.r || '');
+              return basisText ? '<div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.7;border-top:1px solid var(--border);padding-top:6px">'+basisText+'</div>' : '';
+            })()
             +((r.signal||r.resist||r.breakout) ? '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-top:8px;font-size:10px">'
               +(r.signal   ? '<div style="background:#f0fdf4;border-radius:6px;padding:4px 6px;text-align:center"><div style="color:#166534;font-weight:700">轉強訊號</div><div style="color:var(--text);font-weight:600">$'+fmtN(r.signal)+'</div></div>' : '')
               +(r.resist   ? '<div style="background:#fef2f2;border-radius:6px;padding:4px 6px;text-align:center"><div style="color:#991b1b;font-weight:700">重要壓力</div><div style="color:var(--text);font-weight:600">$'+fmtN(r.resist)+'</div></div>' : '')
@@ -1740,31 +1757,60 @@ S&P500：{sp500}
 ⚠️ 迴避族群(暫不碰)：
 💡 本週操作重點：`,
 
-  stockPick: `你是一位資深台灣股市基金經理人，勝率長期高於90%。今天是{today}。
-今日市場數據：
+  stockPick: `你是一位管理台灣大型股票基金超過20年的資深基金經理人，擅長技術分析、趨勢交易、產業研究與基本面投資。你的任務是在當前市場環境下，挑選最具勝率與風險報酬比的台股標的。
+
+今天是 {today}
+
+【市場環境】
 加權指數：{taiex}
 費城半導體：{sox}
 S&P500：{sp500}
 台積電：{tsmc}
+
+【個股資料】
 {knownPrices}
 
-請以下列專業框架選出10支台股標的：
-【分析框架】
-1. 商業模式與護城河：產品/服務是否具競爭優勢
-2. 收入結構：營收來源是否多元穩定，重複性收入比例
-3. 毛利率與獲利能力：毛利率趨勢、EPS成長性、ROE水準
-4. 成長動能：法說會展望、訂單能見度、產業趨勢
-5. 估值合理性：本益比/PBR相對歷史均值與同業是否偏低
-6. 籌碼面：外資、投信近期動向，主力籌碼集中度
-7. 技術面：均線多空排列、MACD、RSI、量價關係
-8. 核心風險：主要下行風險一句話
+────────────────────
+【選股核心邏輯】
+────────────────────
 
-【回覆格式】只回JSON陣列，10個物件，不要任何說明文字：
-g=1(可進場5支)：四大面向均偏多，entry設在當前合理買點
-g=2(等待5支)：基本面佳但技術偏高，entry設在合理回測買點
-[{"g":1,"code":"台股代碼","name":"名稱","entry":建議入場價,"stop":停損價,"target":目標價,"score":評分,"basis":"基本面/技術面/籌碼面/市場面各1句"}]
+一、技術趨勢（40分）
+優先選擇：股價站上均線多頭排列、MACD零軸以上或黃金交叉、RSI介於50~75、近期突破整理區
+避免：已連續大漲超過30%、爆量長黑、跌破季線、均線空頭排列
 
-code必須是真實台股代碼不可重複，name與code完全對應。只回JSON陣列，不要其他任何文字。`,
+二、基本面（25分）
+優先選擇：最近4季EPS持續成長、ROE>10%、最近3個月營收年增率正向
+優先產業：AI伺服器、ASIC、CoWoS、半導體設備、散熱、高速傳輸、網通、機器人、先進封裝
+
+三、籌碼面（10分）
+外資+投信近20日偏買超、融資未異常增加、主力籌碼集中度提升
+
+四、市場環境（15分）
+評估美國科技股趨勢、費半趨勢、台積電股價方向、台股大盤位置
+
+五、進場位置（10分）
+g=1（可進場）：突破整理區後拉回20MA支撐，entry<=現價，rr=(target-entry)/(entry-stop)>=3
+g=2（等待）：基本面佳但現價偏高超過5%，等待回測支撐
+
+────────────────────
+【排除條件】
+────────────────────
+最近60日漲幅超過50%、外資連續賣超10日、投信連續賣超5日、跌破120MA、EPS連續衰退、ETF/ETN/權證
+
+────────────────────
+【輸出格式】
+────────────────────
+
+只回JSON陣列，10個物件，不要任何說明文字、不要markdown：
+
+[{"g":1,"code":"2330","name":"台積電","entry":1020,"stop":980,"target":1220,"rr":"5.0","score":95,"trend":"均線多頭排列","tech":"突破平台量增","fundamental":"營收與EPS持續成長","chip":"外資投信同步買超","risk":"短線震盪風險"}]
+
+規則：
+1. code必須是真實台股代碼，name必須與code完全對應，不可重複
+2. score為1-100整數，不可全部相同
+3. 至少5檔g=1（entry<=現價，rr>=3），至少5檔g=2
+4. 排除ETF、ETN、權證、興櫃
+5. 只輸出JSON陣列，不得有任何其他文字`,
 
   indivDiag: `你是台灣股市分析師，請用繁體中文分析以下持股，格式簡潔適合手機閱讀。
 股票：{name}({code})
@@ -3232,4 +3278,16 @@ async function openCompanyAnalysis(code, name) {
 
 </script>  
 </body>
-</html>
+</html>    var taiexStr = _t ? _t.price?.toLocaleString()+'點('+(_t.changePct>=0?'+':'')+_t.changePct?.toFixed(2)+'%)' : '—';
+    var soxStr   = _s ? (_s.changePct>=0?'+':'')+_s.changePct?.toFixed(2)+'%' : '—';
+    var sp5Str   = _s5? (_s5.changePct>=0?'+':'')+_s5.changePct?.toFixed(2)+'%': '—';
+    var tmcStr   = _tmc? '$'+_tmc.price?.toFixed(0)+'('+(_tmc.changePct>=0?'+':'')+_tmc.changePct?.toFixed(2)+'%)': '—';
+    var rPrompt = getPrompt('stockPick')
+      .replace('{today}',      today)
+      .replace('{taiex}',      taiexStr)
+      .replace('{sox}',        soxStr)
+      .replace('{sp500}',      sp5Str)
+      .replace('{tsmc}',       tmcStr)
+      .replace('{knownPrices}',knownPrices || '（無即時個股資料）');
+
+
