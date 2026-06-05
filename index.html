@@ -821,36 +821,18 @@ function renderHome() {
       var stEl  = document.getElementById('today-strategy');
 
       try {
-        // 抓大盤各類指數(含產業別漲跌)
-        var r = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX20', {
-          signal: AbortSignal.timeout(8000)
-        });
+        // 透過 /api/sector proxy 抓 TWSE 產業資料
         var sectorData = [];
+        try {
+          var sectorRes = await fetch('/api/sector', { signal: AbortSignal.timeout(10000) });
+          if (sectorRes.ok) {
+            var sectorJson = await sectorRes.json();
+            if (sectorJson.ok && Array.isArray(sectorJson.sectors)) {
+              sectorData = sectorJson.sectors;
+            }
+          }
+        } catch(e) { console.log('sector fetch error:', e); }
 
-        if (r.ok) {
-          var data = await r.json();
-          // 每筆：{ Index: '電機機械', Change: '0.50', Direction: '+' }
-          data.forEach(function(item) {
-            var name = item.Index || item.指數名稱 || '';
-            var chg  = parseFloat((item.Change || item.漲跌點數 || '0').replace(/,/g,''));
-            var dir  = (item.Direction || item.漲跌 || '+');
-            var pct  = parseFloat((item.ChangePercent || item.漲跌百分比 || '0').replace(/[+\-%]/g,''));
-            if (!name || name === '加權股價指數' || name === '未含金融保險股指數') return;
-            sectorData.push({
-              name: name,
-              pct:  dir === '-' ? -pct : pct,
-              chg:  dir === '-' ? -chg : chg
-            });
-          });
-        }
-
-        // 若 MI_INDEX20 失敗，嘗試 twse sector API
-        if (!sectorData.length) {
-          var r2 = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d', {
-            signal: AbortSignal.timeout(6000)
-          });
-          // fallback：用 AI 分析
-        }
 
         if (sectorData.length >= 3) {
           // 排序：強→弱
